@@ -9,7 +9,19 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 
-export type EscrowType = 'earnest_money' | 'security_deposit' | 'closing_funds' | 'general';
+export type EscrowType = 
+  // Real Estate
+  | 'earnest_money' 
+  | 'security_deposit' 
+  | 'closing_funds'
+  // Freelance / Services  
+  | 'milestone'
+  | 'freelance'
+  // Commerce
+  | 'purchase'
+  | 'trade'
+  // Custom
+  | 'general';
 
 export type EscrowStatus = 
   | 'created'
@@ -32,12 +44,24 @@ export interface EscrowParty {
 export interface EscrowCondition {
   id: string;
   description: string;
-  type: 'inspection' | 'financing' | 'appraisal' | 'title' | 'closing' | 'move_out' | 'custom';
+  type: 
+    // Real Estate
+    | 'inspection' | 'financing' | 'appraisal' | 'title' | 'closing' | 'move_out'
+    // Freelance/Milestones
+    | 'milestone' | 'delivery' | 'approval' | 'revision'
+    // Commerce
+    | 'shipping' | 'receipt' | 'verification'
+    // Custom
+    | 'custom';
   status: 'pending' | 'satisfied' | 'waived' | 'failed';
   deadline?: string;
   satisfiedAt?: string;
   satisfiedBy?: string;
   evidence?: string;  // URL or description of proof
+  
+  // For milestone escrows - partial release
+  releaseAmount?: string;  // Amount to release when this condition is met
+  releasePercentage?: string;  // Or percentage of total
 }
 
 export interface Escrow {
@@ -306,6 +330,205 @@ export class EscrowManager {
     };
 
     escrows.push(escrow);
+    await this.saveEscrows(escrows);
+    
+    return escrow;
+  }
+
+  /**
+   * Create milestone escrow for freelance/service work
+   */
+  async createMilestone(params: {
+    amount: string;
+    chain: string;
+    client: Omit<EscrowParty, 'role'>;
+    freelancer: Omit<EscrowParty, 'role'>;
+    projectName: string;
+    milestones: {
+      description: string;
+      amount?: string;      // Fixed amount for this milestone
+      percentage?: string;  // Or percentage of total
+      deadline?: string;
+    }[];
+  }): Promise<Escrow> {
+    const escrows = await this.loadEscrows();
+    const totalAmount = parseFloat(params.amount);
+
+    // Convert milestones to conditions with release amounts
+    const conditions: EscrowCondition[] = params.milestones.map((m, i) => ({
+      id: crypto.randomUUID(),
+      description: m.description,
+      type: 'milestone' as const,
+      status: 'pending' as const,
+      deadline: m.deadline,
+      releaseAmount: m.amount,
+      releasePercentage: m.percentage,
+    }));
+
+    // Validate amounts/percentages add up
+    let totalAllocated = 0;
+    for (const cond of conditions) {
+      if (cond.releaseAmount) {
+        totalAllocated += parseFloat(cond.releaseAmount);
+      } else if (cond.releasePercentage) {
+        totalAllocated += totalAmount * (parseFloat(cond.releasePercentage) / 100);
+      }
+    }
+
+    if (Math.abs(totalAllocated - totalAmount) > 0.01) {
+      throw new Error(`Milestone amounts ($${totalAllocated.toFixed(2)}) don't match total ($${params.amount})`);
+    }
+
+    const escrow: Escrow = {
+      id: `MS-${Date.now().toString(36).toUpperCase()}`,
+      type: 'milestone',
+      status: 'created',
+      parties: [
+        { ...params.client, role: 'depositor' },
+        { ...params.freelancer, role: 'recipient' },
+      ],
+      amount: params.amount,
+      chain: params.chain,
+      escrowAddress: this.generateEscrowAddress(),
+      conditions,
+      releaseRequires: 'any_party',  // Each milestone releases independently
+      approvals: [],
+      requiredApprovals: ['depositor'],  // Client approves each milestone
+      notes: `Project: ${params.projectName}`,
+      documents: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    escrows.push(escrow);
+    await this.saveEscrows(escrows);
+    
+    return escrow;
+  }
+
+  /**
+   * Create purchase escrow (buyer/seller goods transaction)
+   */
+  async createPurchase(params: {
+    amount: string;
+    chain: string;
+    buyer: Omit<EscrowParty, 'role'>;
+    seller: Omit<EscrowParty, 'role'>;
+    itemDescription: string;
+    requiresShipping?: boolean;
+    inspectionPeriodDays?: number;
+  }): Promise<Escrow> {
+    const escrows = await this.loadEscrows();
+
+    const conditions: EscrowCondition[] = [];
+
+    if (params.requiresShipping) {
+      conditions.push({
+        id: crypto.randomUUID(),
+        description: 'Item shipped by seller',
+        type: 'shipping',
+        status: 'pending',
+      });
+      conditions.push({
+        id: crypto.randomUUID(),
+        description: 'Item received by buyer',
+        type: 'receipt',
+        status: 'pending',
+      });
+    }
+
+    if (params.inspectionPeriodDays) {
+      conditions.push({
+        id: crypto.randomUUID(),
+        description: `Inspection period (${params.inspectionPeriodDays} days)`,
+        type: 'inspection',
+        status: 'pending',
+        deadline: this.addDays(new Date(), params.inspectionPeriodDays).toISOString(),
+      });
+    }
+
+    // Always require buyer approval
+    conditions.push({
+      id: crypto.randomUUID(),
+      description: 'Buyer approves release',
+      type: 'approval',
+      status: 'pending',
+    });
+
+    const escrow: Escrow = {
+      id: `PU-${Date.now().toString(36).toUpperCase()}`,
+      type: 'purchase',
+      status: 'created',
+      parties: [
+        { ...params.buyer, role: 'buyer' },
+        { ...params.seller, role: 'seller' },
+      ],
+      amount: params.amount,
+      chain: params.chain,
+      escrowAddress: this.generateEscrowAddress(),
+      conditions,
+      releaseRequires: 'all_conditions',
+      approvals: [],
+      requiredApprovals: ['buyer'],
+      notes: params.itemDescription,
+      documents: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    escrows.push(escrow);
+    await this.saveEscrows(escrows);
+    
+    return escrow;
+  }
+
+  /**
+   * Release partial amount (for milestone escrows)
+   */
+  async releasePartial(
+    escrowId: string, 
+    conditionId: string, 
+    toAddress: string, 
+    txHash: string
+  ): Promise<Escrow | null> {
+    const escrows = await this.loadEscrows();
+    const escrow = escrows.find(e => e.id === escrowId);
+    
+    if (!escrow) return null;
+    
+    const condition = escrow.conditions.find(c => c.id === conditionId);
+    if (!condition || condition.status !== 'satisfied') {
+      throw new Error('Condition must be satisfied before partial release');
+    }
+
+    // Calculate release amount
+    let releaseAmount: string;
+    if (condition.releaseAmount) {
+      releaseAmount = condition.releaseAmount;
+    } else if (condition.releasePercentage) {
+      const total = parseFloat(escrow.amount);
+      releaseAmount = (total * parseFloat(condition.releasePercentage) / 100).toFixed(2);
+    } else {
+      throw new Error('Condition has no release amount defined');
+    }
+
+    // Record the partial release
+    if (!escrow.releaseTo) {
+      escrow.releaseTo = toAddress;
+      escrow.releaseTxHash = txHash;
+    }
+
+    // Check if all milestones released
+    const allReleased = escrow.conditions
+      .filter(c => c.type === 'milestone')
+      .every(c => c.status === 'satisfied');
+
+    if (allReleased) {
+      escrow.status = 'released';
+      escrow.releasedAt = new Date().toISOString();
+    }
+
+    escrow.updatedAt = new Date().toISOString();
     await this.saveEscrows(escrows);
     
     return escrow;
