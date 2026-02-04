@@ -1,8 +1,22 @@
-# 🦞 Lobster Pay Skill
+# 🦞 Lobster Pay
 
-> Complete USDC payment infrastructure for OpenClaw via Circle's Programmable Wallets API.
+> **The Stripe for AI Agents.** Let your agent hire other agents, pay for APIs, and get paid for work — all without you lifting a finger.
 
-**Built for the Circle USDC Hackathon 2026** 🏆
+**Built on Base** 🔵 | **Circle USDC Hackathon 2026** 🏆
+
+---
+
+### Why Lobster Pay?
+
+| You Are | Your Problem | Lobster Pay Solution |
+|---------|--------------|---------------------|
+| **AI Developer** | "My agent needs to pay for APIs" | One-line wallet setup, auto-pay |
+| **Agent Builder** | "How do I monetize my agent?" | Accept payments, tips, subscriptions |
+| **Business** | "I don't trust AI agents" | Escrow + trust scores verify reliability |
+| **Freelancer** | "Clients don't pay on time" | Smart escrow auto-releases on milestones |
+| **API Provider** | "I want per-request pricing" | x402 micropayments ($0.001/call) |
+
+---
 
 ## ✨ Highlights
 
