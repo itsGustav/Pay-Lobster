@@ -1,13 +1,21 @@
 /**
- * Real Estate Escrow Module
+ * Universal Escrow Module (Escrow as a Service - EaaS)
  * 
- * Smart contract-style escrow for earnest money deposits,
- * rental security deposits, and closing funds.
+ * Smart contract-style escrow for multiple verticals:
+ * - Real estate (earnest money, security deposits, closing)
+ * - Freelance/Services (milestones, deliverables)
+ * - Commerce (purchases, trades, swaps)
+ * - P2P (OTC trades, loans)
+ * - Digital (licenses, subscriptions, content)
+ * - Custom (user-defined)
  */
 
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
+import type { EscrowTemplate, EscrowVertical } from './escrow-templates';
+import { getTemplate } from './escrow-templates';
+import type { BuiltCondition } from './condition-builder';
 
 export type EscrowType = 
   // Real Estate
@@ -32,8 +40,23 @@ export type EscrowStatus =
   | 'disputed'
   | 'cancelled';
 
+/**
+ * Standard roles across verticals
+ */
+export type StandardRole = 
+  | 'depositor' | 'recipient'           // Universal
+  | 'buyer' | 'seller'                  // Commerce
+  | 'client' | 'provider'               // Services
+  | 'landlord' | 'tenant'               // Real estate
+  | 'agent' | 'title_company'           // Real estate agents
+  | 'arbiter' | 'witness'               // Dispute resolution
+  | 'lender' | 'borrower'               // P2P lending
+  | 'party_a' | 'party_b'               // Generic parties
+  | 'marketplace' | 'platform'          // Third parties
+  | 'consultant' | 'contractor' | 'inspector' | 'vendor' | 'subscriber' | 'creator'; // Specific roles
+
 export interface EscrowParty {
-  role: 'buyer' | 'seller' | 'landlord' | 'tenant' | 'agent' | 'title_company' | 'depositor' | 'recipient';
+  role: StandardRole | string;  // Standard or custom role
   name: string;
   email?: string;
   phone?: string;
@@ -51,6 +74,8 @@ export interface EscrowCondition {
     | 'milestone' | 'delivery' | 'approval' | 'revision'
     // Commerce
     | 'shipping' | 'receipt' | 'verification'
+    // Document/Time-based
+    | 'document' | 'deadline'
     // Custom
     | 'custom';
   status: 'pending' | 'satisfied' | 'waived' | 'failed';
@@ -62,6 +87,9 @@ export interface EscrowCondition {
   // For milestone escrows - partial release
   releaseAmount?: string;  // Amount to release when this condition is met
   releasePercentage?: string;  // Or percentage of total
+  
+  // Additional metadata
+  metadata?: Record<string, any>;
 }
 
 export interface Escrow {
@@ -817,6 +845,181 @@ export class EscrowManager {
     }
     
     return escrow || null;
+  }
+
+  // ============ UNIVERSAL ESCROW API (EaaS) ============
+
+  /**
+   * Create escrow from template
+   * 
+   * @example
+   * await escrowManager.create({
+   *   template: 'project_milestone',
+   *   amount: '1000',
+   *   chain: 'polygon',
+   *   parties: [
+   *     { role: 'client', name: 'Alice' },
+   *     { role: 'provider', name: 'Bob' }
+   *   ]
+   * })
+   */
+  async create(params: {
+    template: string;
+    amount: string;
+    chain: string;
+    parties: Omit<EscrowParty, 'role'> & { role: string }[];
+    customConditions?: Omit<EscrowCondition, 'id' | 'status'>[];
+    metadata?: Record<string, any>;
+    autoReleaseDays?: number;
+  }): Promise<Escrow> {
+    const template = getTemplate(params.template);
+    if (!template) {
+      throw new Error(`Template '${params.template}' not found`);
+    }
+
+    const escrows = await this.loadEscrows();
+
+    // Convert template conditions to EscrowCondition format
+    const conditions: EscrowCondition[] = template.conditions.map(c => ({
+      id: crypto.randomUUID(),
+      description: c.description,
+      type: c.type,
+      status: 'pending',
+      ...(c.deadline && { deadline: c.deadline }),
+      ...(c.releaseAmount && { releaseAmount: c.releaseAmount }),
+      ...(c.releasePercentage && { releasePercentage: c.releasePercentage }),
+      ...(c.metadata && { metadata: c.metadata }),
+    }));
+
+    // Add custom conditions if provided
+    const customConditions = (params.customConditions || []).map(c => ({
+      ...c,
+      id: crypto.randomUUID(),
+      status: 'pending' as const,
+    }));
+
+    const escrow: Escrow = {
+      id: `${template.vertical.toUpperCase().slice(0, 2)}-${Date.now().toString(36).toUpperCase()}`,
+      type: this.mapVerticalToType(template.vertical),
+      status: 'created',
+      parties: params.parties as EscrowParty[],
+      amount: params.amount,
+      chain: params.chain,
+      escrowAddress: this.generateEscrowAddress(),
+      conditions: [...conditions, ...customConditions],
+      releaseRequires: template.releaseRequires,
+      approvals: [],
+      requiredApprovals: template.recommendedPartyRoles,
+      documents: [],
+      notes: `Created from template: ${template.name}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      fundingDeadline: this.addDays(new Date(), 3).toISOString(),
+    };
+
+    // Add auto-release if specified
+    if (params.autoReleaseDays || template.autoReleaseDays) {
+      const days = params.autoReleaseDays || template.autoReleaseDays!;
+      conditions.push({
+        id: crypto.randomUUID(),
+        description: `Auto-release after ${days} days if no disputes`,
+        type: 'deadline',
+        status: 'pending',
+        deadline: this.addDays(new Date(), days).toISOString(),
+      });
+    }
+
+    escrows.push(escrow);
+    await this.saveEscrows(escrows);
+    
+    return escrow;
+  }
+
+  /**
+   * Create custom escrow with builder conditions
+   * 
+   * @example
+   * import { ConditionBuilder } from './condition-builder';
+   * 
+   * await escrowManager.createCustom({
+   *   amount: '5000',
+   *   chain: 'ethereum',
+   *   parties: [
+   *     { role: 'buyer', name: 'Alice' },
+   *     { role: 'seller', name: 'Bob' }
+   *   ],
+   *   conditions: [
+   *     ConditionBuilder.milestone('Phase 1', 30),
+   *     ConditionBuilder.milestone('Phase 2', 70),
+   *   ],
+   *   releaseRequires: 'condition_based'
+   * })
+   */
+  async createCustom(params: {
+    amount: string;
+    chain: string;
+    parties: Omit<EscrowParty, 'role'> & { role: string }[];
+    conditions: BuiltCondition[];
+    releaseRequires?: 'all_conditions' | 'majority_approval' | 'condition_based' | 'any_party';
+    requiredApprovals?: string[];
+    metadata?: Record<string, any>;
+    autoReleaseDays?: number;
+  }): Promise<Escrow> {
+    const escrows = await this.loadEscrows();
+
+    const conditions: EscrowCondition[] = params.conditions.map(c => ({
+      ...c,
+      status: 'pending',
+    }));
+
+    // Add auto-release if specified
+    if (params.autoReleaseDays) {
+      conditions.push({
+        id: crypto.randomUUID(),
+        description: `Auto-release after ${params.autoReleaseDays} days if no disputes`,
+        type: 'deadline',
+        status: 'pending',
+        deadline: this.addDays(new Date(), params.autoReleaseDays).toISOString(),
+      });
+    }
+
+    const escrow: Escrow = {
+      id: `CUSTOM-${Date.now().toString(36).toUpperCase()}`,
+      type: 'general',
+      status: 'created',
+      parties: params.parties as EscrowParty[],
+      amount: params.amount,
+      chain: params.chain,
+      escrowAddress: this.generateEscrowAddress(),
+      conditions,
+      releaseRequires: params.releaseRequires || 'all_conditions',
+      approvals: [],
+      requiredApprovals: params.requiredApprovals || params.parties.map(p => p.role),
+      documents: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      fundingDeadline: this.addDays(new Date(), 3).toISOString(),
+    };
+
+    escrows.push(escrow);
+    await this.saveEscrows(escrows);
+    
+    return escrow;
+  }
+
+  /**
+   * Map vertical to legacy EscrowType
+   */
+  private mapVerticalToType(vertical: EscrowVertical): EscrowType {
+    switch (vertical) {
+      case 'real_estate': return 'earnest_money';
+      case 'freelance': return 'milestone';
+      case 'commerce': return 'purchase';
+      case 'p2p': return 'trade';
+      case 'digital': return 'purchase';
+      case 'services': return 'freelance';
+      default: return 'general';
+    }
   }
 
   // ============ Formatting ============

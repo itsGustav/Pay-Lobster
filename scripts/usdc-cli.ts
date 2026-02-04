@@ -12,6 +12,9 @@
  */
 
 import { CircleClient, CHAIN_NAMES, USDC_TOKENS } from '../lib/circle-client';
+import EscrowManager from '../lib/escrow';
+import { listTemplates, listTemplatesByVertical, getVerticals, type EscrowVertical } from '../lib/escrow-templates';
+import { ConditionBuilder } from '../lib/condition-builder';
 
 // Load config from environment or Clawdbot config
 function loadConfig(): { apiKey: string; entitySecret: string } {
@@ -434,6 +437,18 @@ x402 Payment Commands:
   x402 auto <pattern>  Enable auto-pay for URL pattern
   x402 receipts        Show payment history
 
+Escrow Commands (EaaS):
+  escrow templates [vertical]    List available escrow templates
+  escrow create --template <name> --amount <amt>
+                       Create escrow from template
+  escrow create --custom --conditions <list>
+                       Create custom escrow
+  escrow list          List all escrows
+  escrow show <id>     Show escrow details
+  escrow fund <id>     Fund an escrow
+  escrow approve <id>  Approve escrow release
+  escrow release <id>  Release funds
+
 Environment:
   CIRCLE_API_KEY       Your Circle API key
   CIRCLE_ENTITY_SECRET Your entity secret
@@ -447,6 +462,292 @@ Examples:
 
 Get credentials: https://console.circle.com
   `);
+}
+
+// ============ ESCROW COMMANDS ============
+
+async function escrowCommand(args: string[]) {
+  const subCommand = args[1]?.toLowerCase();
+
+  switch (subCommand) {
+    case 'templates':
+      await escrowTemplates(args);
+      break;
+    case 'create':
+      await escrowCreate(args);
+      break;
+    case 'list':
+      await escrowList();
+      break;
+    case 'show':
+      await escrowShow(args);
+      break;
+    case 'fund':
+      await escrowFund(args);
+      break;
+    case 'approve':
+      await escrowApprove(args);
+      break;
+    case 'release':
+      await escrowRelease(args);
+      break;
+    default:
+      console.log(`
+Escrow Commands:
+
+  usdc-cli escrow templates [vertical]   List available escrow templates
+  usdc-cli escrow create --template <name> --amount <amt> [options]
+                                          Create escrow from template
+  usdc-cli escrow create --custom [options]
+                                          Create custom escrow
+  usdc-cli escrow list                   List all escrows
+  usdc-cli escrow show <id>              Show escrow details
+  usdc-cli escrow fund <id>              Fund an escrow
+  usdc-cli escrow approve <id>           Approve escrow release
+  usdc-cli escrow release <id>           Release funds
+
+Examples:
+  usdc-cli escrow templates freelance
+  usdc-cli escrow create --template project_milestone --amount 1000
+  usdc-cli escrow create --custom --conditions "Milestone 1:30%,Milestone 2:70%"
+      `);
+  }
+}
+
+async function escrowTemplates(args: string[]) {
+  const vertical = args[2] as EscrowVertical | undefined;
+
+  if (vertical && !getVerticals().includes(vertical)) {
+    console.error(`❌ Invalid vertical. Choose from: ${getVerticals().join(', ')}`);
+    return;
+  }
+
+  const templates = vertical 
+    ? listTemplatesByVertical(vertical)
+    : listTemplates();
+
+  console.log(`\n📋 Escrow Templates${vertical ? ` (${vertical})` : ''}:\n`);
+  
+  for (const template of templates) {
+    console.log(`  ${template.name}`);
+    console.log(`  └─ ${template.description}`);
+    console.log(`     Vertical: ${template.vertical}`);
+    console.log(`     Parties: ${template.recommendedPartyRoles.join(', ')}`);
+    console.log(`     Conditions: ${template.conditions.length}`);
+    if (template.autoReleaseDays) {
+      console.log(`     Auto-release: ${template.autoReleaseDays} days`);
+    }
+    console.log();
+  }
+
+  console.log(`Total: ${templates.length} templates`);
+  console.log(`\nVerticals: ${getVerticals().join(', ')}`);
+}
+
+async function escrowCreate(args: string[]) {
+  const templateIdx = args.indexOf('--template');
+  const customIdx = args.indexOf('--custom');
+  const amountIdx = args.indexOf('--amount');
+  const chainIdx = args.indexOf('--chain');
+  const conditionsIdx = args.indexOf('--conditions');
+
+  if (amountIdx === -1 || amountIdx + 1 >= args.length) {
+    console.error('❌ --amount is required');
+    return;
+  }
+
+  const amount = args[amountIdx + 1];
+  const chain = chainIdx !== -1 ? args[chainIdx + 1] : 'polygon';
+
+  const escrowManager = new EscrowManager();
+
+  if (templateIdx !== -1 && templateIdx + 1 < args.length) {
+    // Create from template
+    const templateName = args[templateIdx + 1];
+    
+    console.log(`📝 Creating escrow from template: ${templateName}...`);
+    
+    // For demo, create with placeholder parties
+    const escrow = await escrowManager.create({
+      template: templateName,
+      amount,
+      chain,
+      parties: [
+        { role: 'client', name: 'Client (You)' },
+        { role: 'provider', name: 'Provider' },
+      ],
+    });
+
+    console.log(`✅ Escrow created: ${escrow.id}\n`);
+    console.log(escrowManager.formatEscrowSummary(escrow));
+    
+  } else if (customIdx !== -1) {
+    // Create custom escrow
+    if (conditionsIdx === -1) {
+      console.error('❌ --conditions is required for custom escrows');
+      console.error('Format: "Description 1:25%,Description 2:75%"');
+      return;
+    }
+
+    const conditionsStr = args[conditionsIdx + 1];
+    const conditionParts = conditionsStr.split(',');
+    
+    const conditions = conditionParts.map(part => {
+      const [desc, percent] = part.split(':');
+      if (percent) {
+        return ConditionBuilder.milestone(desc.trim(), parseInt(percent.replace('%', '')));
+      }
+      return ConditionBuilder.custom(desc.trim());
+    });
+
+    console.log(`📝 Creating custom escrow...`);
+    
+    const escrow = await escrowManager.createCustom({
+      amount,
+      chain,
+      parties: [
+        { role: 'depositor', name: 'Depositor (You)' },
+        { role: 'recipient', name: 'Recipient' },
+      ],
+      conditions,
+      releaseRequires: 'condition_based',
+    });
+
+    console.log(`✅ Escrow created: ${escrow.id}\n`);
+    console.log(escrowManager.formatEscrowSummary(escrow));
+    
+  } else {
+    console.error('❌ Specify either --template or --custom');
+    console.error('Examples:');
+    console.error('  usdc-cli escrow create --template project_milestone --amount 1000');
+    console.error('  usdc-cli escrow create --custom --amount 500 --conditions "Task 1:50%,Task 2:50%"');
+  }
+}
+
+async function escrowList() {
+  const escrowManager = new EscrowManager();
+  const escrows = await escrowManager.list();
+
+  if (escrows.length === 0) {
+    console.log('No escrows found.');
+    return;
+  }
+
+  console.log(`\n📋 Escrows (${escrows.length}):\n`);
+  
+  for (const escrow of escrows) {
+    const statusEmoji = {
+      created: '📝',
+      funded: '💰',
+      pending_release: '⏳',
+      released: '✅',
+      refunded: '↩️',
+      disputed: '⚠️',
+      cancelled: '❌',
+    }[escrow.status] || '❓';
+
+    console.log(`  ${statusEmoji} ${escrow.id} - ${escrow.type} - ${escrow.status}`);
+    console.log(`     Amount: $${escrow.amount} USDC`);
+    console.log(`     Parties: ${escrow.parties.map(p => `${p.role}:${p.name}`).join(', ')}`);
+  }
+}
+
+async function escrowShow(args: string[]) {
+  const escrowId = args[2];
+  if (!escrowId) {
+    console.error('Usage: usdc-cli escrow show <escrow-id>');
+    return;
+  }
+
+  const escrowManager = new EscrowManager();
+  const escrow = await escrowManager.get(escrowId);
+
+  if (!escrow) {
+    console.error(`❌ Escrow ${escrowId} not found`);
+    return;
+  }
+
+  console.log();
+  console.log(escrowManager.formatEscrowSummary(escrow));
+}
+
+async function escrowFund(args: string[]) {
+  const escrowId = args[2];
+  if (!escrowId) {
+    console.error('Usage: usdc-cli escrow fund <escrow-id>');
+    return;
+  }
+
+  console.log(`💰 Funding escrow ${escrowId}...`);
+  
+  const escrowManager = new EscrowManager();
+  const escrow = await escrowManager.get(escrowId);
+
+  if (!escrow) {
+    console.error(`❌ Escrow ${escrowId} not found`);
+    return;
+  }
+
+  // In real implementation, this would trigger USDC transfer
+  console.log(`\n📤 Transfer ${escrow.amount} USDC to:`);
+  console.log(`   ${escrow.escrowAddress}`);
+  console.log(`   Chain: ${escrow.chain}`);
+  console.log(`\n⚠️  Demo mode: Marking as funded without actual transfer`);
+
+  await escrowManager.markFunded(escrowId, 'demo-tx-hash', escrow.escrowAddress);
+  
+  console.log(`✅ Escrow ${escrowId} funded`);
+}
+
+async function escrowApprove(args: string[]) {
+  const escrowId = args[2];
+  if (!escrowId) {
+    console.error('Usage: usdc-cli escrow approve <escrow-id>');
+    return;
+  }
+
+  const escrowManager = new EscrowManager();
+  const escrow = await escrowManager.get(escrowId);
+
+  if (!escrow) {
+    console.error(`❌ Escrow ${escrowId} not found`);
+    return;
+  }
+
+  // Demo: approve as first party
+  const role = escrow.parties[0].role;
+  await escrowManager.approve(escrowId, role);
+  
+  console.log(`✅ Approved release as ${role}`);
+}
+
+async function escrowRelease(args: string[]) {
+  const escrowId = args[2];
+  if (!escrowId) {
+    console.error('Usage: usdc-cli escrow release <escrow-id>');
+    return;
+  }
+
+  const escrowManager = new EscrowManager();
+  const escrow = await escrowManager.get(escrowId);
+
+  if (!escrow) {
+    console.error(`❌ Escrow ${escrowId} not found`);
+    return;
+  }
+
+  console.log(`💸 Releasing funds from escrow ${escrowId}...`);
+  console.log(`⚠️  Demo mode: Marking as released without actual transfer`);
+
+  const releaseTo = escrow.parties.find(p => p.role === 'recipient' || p.role === 'provider' || p.role === 'seller');
+  if (!releaseTo) {
+    console.error('❌ No recipient found');
+    return;
+  }
+
+  await escrowManager.release(escrowId, releaseTo.walletAddress || '0x0000...demo', 'demo-release-tx', releaseTo.role);
+  
+  console.log(`✅ Funds released to ${releaseTo.name}`);
 }
 
 // Main
@@ -479,6 +780,9 @@ async function main() {
         break;
       case 'x402':
         await x402Command(args);
+        break;
+      case 'escrow':
+        await escrowCommand(args);
         break;
       case 'help':
       case '--help':
