@@ -37,6 +37,7 @@ export interface Invoice {
   paymentChain: string;
   paymentAddress: string;
   paymentLink?: string;
+  x402PaymentUrl?: string;  // x402-enabled payment URL
   txHash?: string;
   paidAt?: string;
   paidAmount?: string;
@@ -162,6 +163,9 @@ export class InvoiceManager {
 
     // Generate payment link
     invoice.paymentLink = this.generatePaymentLink(invoice);
+    
+    // Generate x402 payment URL
+    invoice.x402PaymentUrl = this.generateX402PaymentUrl(invoice);
 
     invoices.push(invoice);
     await this.saveInvoices(invoices);
@@ -274,6 +278,48 @@ export class InvoiceManager {
       ref: invoice.number,
     });
     return `usdc://pay?${params.toString()}`;
+  }
+
+  /**
+   * Generate x402-enabled payment URL for invoice
+   * Returns a URL that triggers 402 Payment Required
+   */
+  private generateX402PaymentUrl(invoice: Invoice): string {
+    // This would point to your x402-enabled invoice payment endpoint
+    const baseUrl = process.env.X402_BASE_URL || 'https://api.usdc-agent.com';
+    return `${baseUrl}/invoices/${invoice.id}/pay`;
+  }
+
+  /**
+   * Add x402 payment method to invoice
+   * Creates a payment-gated endpoint for this invoice
+   */
+  async enableX402Payment(
+    invoiceId: string,
+    options?: {
+      baseUrl?: string;
+      expiryHours?: number;
+    }
+  ): Promise<string> {
+    const invoice = await this.get(invoiceId);
+    if (!invoice) {
+      throw new Error('Invoice not found');
+    }
+
+    const baseUrl = options?.baseUrl || process.env.X402_BASE_URL || 'https://api.usdc-agent.com';
+    const x402Url = `${baseUrl}/invoices/${invoice.id}/pay`;
+
+    invoice.x402PaymentUrl = x402Url;
+    invoice.updatedAt = new Date().toISOString();
+
+    const invoices = await this.loadInvoices();
+    const index = invoices.findIndex(inv => inv.id === invoiceId);
+    if (index !== -1) {
+      invoices[index] = invoice;
+      await this.saveInvoices(invoices);
+    }
+
+    return x402Url;
   }
 
   /**

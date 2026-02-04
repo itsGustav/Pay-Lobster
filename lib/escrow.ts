@@ -899,4 +899,115 @@ export class EscrowManager {
   }
 }
 
+/**
+ * x402 Premium Escrow Features
+ * 
+ * Gate premium escrow operations behind x402 payments
+ */
+export interface PremiumEscrowFeatures {
+  yieldOptimization?: boolean;    // Route funds through yield-bearing protocols
+  insurance?: boolean;             // Add escrow insurance coverage
+  prioritySupport?: boolean;       // Priority dispute resolution
+  analytics?: boolean;             // Advanced analytics and reporting
+}
+
+export interface X402EscrowEndpoints {
+  optimize: string;      // Yield optimization endpoint
+  insure: string;        // Insurance coverage endpoint
+  analytics: string;     // Analytics endpoint
+  support: string;       // Priority support endpoint
+}
+
+// Premium feature pricing (in USDC)
+export const PREMIUM_ESCROW_PRICING = {
+  yieldOptimization: '0.25',  // Enable yield-bearing escrow
+  insurance: '0.50',          // Add insurance coverage
+  prioritySupport: '1.00',    // Priority support package
+  analytics: '0.10',          // Advanced analytics
+};
+
+/**
+ * Generate x402 premium feature URLs for escrow
+ */
+export function generateX402EscrowUrls(
+  escrowId: string,
+  baseUrl?: string
+): X402EscrowEndpoints {
+  const base = baseUrl || process.env.X402_BASE_URL || 'https://api.usdc-agent.com';
+  
+  return {
+    optimize: `${base}/escrow/${escrowId}/optimize`,
+    insure: `${base}/escrow/${escrowId}/insure`,
+    analytics: `${base}/escrow/${escrowId}/analytics`,
+    support: `${base}/escrow/${escrowId}/support`,
+  };
+}
+
+/**
+ * Example: Enable premium features on escrow
+ */
+export async function enablePremiumFeatures(
+  escrow: Escrow,
+  features: PremiumEscrowFeatures,
+  x402Fetch: (url: string) => Promise<Response>
+): Promise<{ enabled: string[]; failed: string[] }> {
+  const urls = generateX402EscrowUrls(escrow.id);
+  const enabled: string[] = [];
+  const failed: string[] = [];
+
+  if (features.yieldOptimization) {
+    try {
+      const response = await x402Fetch(urls.optimize);
+      if (response.ok) {
+        enabled.push('yieldOptimization');
+      } else {
+        failed.push('yieldOptimization');
+      }
+    } catch {
+      failed.push('yieldOptimization');
+    }
+  }
+
+  if (features.insurance) {
+    try {
+      const response = await x402Fetch(urls.insure);
+      if (response.ok) {
+        enabled.push('insurance');
+      } else {
+        failed.push('insurance');
+      }
+    } catch {
+      failed.push('insurance');
+    }
+  }
+
+  if (features.analytics) {
+    try {
+      const response = await x402Fetch(urls.analytics);
+      if (response.ok) {
+        enabled.push('analytics');
+      } else {
+        failed.push('analytics');
+      }
+    } catch {
+      failed.push('analytics');
+    }
+  }
+
+  if (features.prioritySupport) {
+    try {
+      const response = await x402Fetch(urls.support);
+      if (response.ok) {
+        enabled.push('prioritySupport');
+      } else {
+        failed.push('prioritySupport');
+      }
+    } catch {
+      failed.push('prioritySupport');
+    }
+  }
+
+  return { enabled, failed };
+}
+
 export default EscrowManager;

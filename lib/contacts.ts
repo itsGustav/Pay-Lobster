@@ -459,4 +459,157 @@ export class ContactManager {
   }
 }
 
+/**
+ * x402 Premium Contact Features
+ * 
+ * Premium verification and risk assessment services
+ */
+export interface PremiumContactFeatures {
+  onChainVerification?: boolean;  // Verify address activity on-chain
+  riskAssessment?: boolean;       // Calculate risk score
+  fraudDetection?: boolean;       // Check for fraud patterns
+  transactionHistory?: boolean;   // Full on-chain transaction history
+}
+
+export interface ContactVerificationResult {
+  contact: Contact;
+  onChainVerified: boolean;
+  riskScore?: {
+    score: number;              // 0-100 (lower is better)
+    level: 'low' | 'medium' | 'high' | 'critical';
+    factors: string[];
+  };
+  fraudFlags?: string[];
+  transactionSummary?: {
+    totalVolume: string;
+    transactionCount: number;
+    firstSeen: string;
+    lastSeen: string;
+    interactedWith: number;
+  };
+  verified: boolean;
+  verifiedAt: string;
+}
+
+// Premium verification pricing (in USDC)
+export const PREMIUM_CONTACT_PRICING = {
+  basicVerification: '0.05',      // Basic on-chain verification
+  fullVerification: '0.10',       // Full verification + risk score
+  fraudCheck: '0.15',             // Fraud detection analysis
+  fullReport: '0.25',             // Complete verification report
+};
+
+/**
+ * Generate x402 verification URL for contact
+ */
+export function generateX402VerificationUrl(
+  contactId: string,
+  verificationType: 'basic' | 'full' | 'fraud' | 'report' = 'basic',
+  baseUrl?: string
+): string {
+  const base = baseUrl || process.env.X402_BASE_URL || 'https://api.usdc-agent.com';
+  return `${base}/contacts/${contactId}/verify/${verificationType}`;
+}
+
+/**
+ * Verify contact with premium features via x402
+ */
+export async function verifyContactPremium(
+  contact: Contact,
+  features: PremiumContactFeatures,
+  x402Fetch: (url: string) => Promise<Response>
+): Promise<ContactVerificationResult> {
+  const result: ContactVerificationResult = {
+    contact,
+    onChainVerified: false,
+    verified: false,
+    verifiedAt: new Date().toISOString(),
+  };
+
+  try {
+    // Determine verification type based on features
+    let verificationType: 'basic' | 'full' | 'fraud' | 'report' = 'basic';
+    
+    if (features.fraudDetection) {
+      verificationType = 'fraud';
+    } else if (features.onChainVerification && features.riskAssessment && features.transactionHistory) {
+      verificationType = 'report';
+    } else if (features.riskAssessment) {
+      verificationType = 'full';
+    }
+
+    // Call x402-protected verification endpoint
+    const url = generateX402VerificationUrl(contact.id, verificationType);
+    const response = await x402Fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Verification failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // Parse verification results
+    result.onChainVerified = data.onChainVerified || false;
+    result.riskScore = data.riskScore;
+    result.fraudFlags = data.fraudFlags;
+    result.transactionSummary = data.transactionSummary;
+    result.verified = true;
+
+  } catch (error) {
+    console.error('Contact verification error:', error);
+    result.verified = false;
+  }
+
+  return result;
+}
+
+/**
+ * Mock verification for testing
+ * Simulates what a real x402-protected endpoint would return
+ */
+export function mockContactVerification(contact: Contact): ContactVerificationResult {
+  // Generate mock on-chain data
+  const addressCount = contact.addresses.length;
+  const hasMultipleChains = addressCount > 1;
+  
+  // Calculate mock risk score
+  let riskScore = 20; // Base low risk
+  if (addressCount === 0) riskScore += 40; // No addresses = higher risk
+  if (!contact.email && !contact.phone) riskScore += 20; // No contact info
+  if (contact.transactionCount === 0) riskScore += 30; // No transaction history
+  
+  riskScore = Math.min(100, riskScore);
+  
+  const riskLevel = 
+    riskScore < 25 ? 'low' :
+    riskScore < 50 ? 'medium' :
+    riskScore < 75 ? 'high' : 'critical';
+
+  const factors: string[] = [];
+  if (addressCount === 0) factors.push('No wallet addresses on file');
+  if (contact.transactionCount === 0) factors.push('No transaction history');
+  if (!contact.email && !contact.phone) factors.push('No contact information');
+  if (hasMultipleChains) factors.push('Active on multiple chains (positive)');
+
+  return {
+    contact,
+    onChainVerified: addressCount > 0,
+    riskScore: {
+      score: riskScore,
+      level: riskLevel,
+      factors,
+    },
+    fraudFlags: riskScore > 70 ? ['High risk score', 'Limited verification data'] : [],
+    transactionSummary: {
+      totalVolume: contact.totalSent || '0',
+      transactionCount: contact.transactionCount,
+      firstSeen: contact.createdAt,
+      lastSeen: contact.lastTransactionAt || contact.createdAt,
+      interactedWith: Math.floor(Math.random() * 50) + 5,
+    },
+    verified: true,
+    verifiedAt: new Date().toISOString(),
+  };
+}
+
 export default ContactManager;

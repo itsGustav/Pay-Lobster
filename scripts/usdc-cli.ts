@@ -256,6 +256,165 @@ function normalizeChain(input: string): string {
   return map[input.toLowerCase()] || input.toUpperCase();
 }
 
+async function x402Pay(args: string[]) {
+  // x402 pay <url>
+  const urlIdx = args.indexOf('pay') + 1;
+  if (urlIdx >= args.length) {
+    console.error('Usage: usdc-cli x402 pay <url>');
+    process.exit(1);
+  }
+
+  const url = args[urlIdx];
+
+  console.log(`💳 Fetching payment challenge from ${url}...`);
+
+  try {
+    // First request - get 402 challenge
+    const response = await fetch(url);
+
+    if (response.status !== 402) {
+      console.log(`✅ No payment required (status: ${response.status})`);
+      const data = await response.text();
+      console.log(data);
+      return;
+    }
+
+    const challenge = await response.json();
+    const paymentInfo = challenge['x-payment-required'];
+
+    if (!paymentInfo) {
+      console.error('❌ Invalid 402 response: missing x-payment-required');
+      process.exit(1);
+    }
+
+    console.log(`\n💳 Payment Required`);
+    console.log(`   Amount: ${paymentInfo.amount} USDC`);
+    console.log(`   Description: ${paymentInfo.description}`);
+    console.log(`   Receiver: ${paymentInfo.receiver}`);
+    console.log(`   Network: ${paymentInfo.network}`);
+
+    console.log(`\nSending payment...`);
+
+    const client = getClient();
+    const wallets = await client.listWallets();
+    const wallet = wallets.find(w => w.blockchain === paymentInfo.network);
+
+    if (!wallet) {
+      console.error(`❌ No wallet found for network ${paymentInfo.network}`);
+      process.exit(1);
+    }
+
+    const tx = await client.sendUSDC({
+      fromWalletId: wallet.id,
+      toAddress: paymentInfo.receiver,
+      amount: paymentInfo.amount,
+    });
+
+    console.log(`✅ Payment sent! TX: ${tx.txHash || tx.id}`);
+
+    // Generate signature (simplified - production would use facilitator)
+    const signature = `sig_${tx.txHash || tx.id}_${Date.now()}`;
+
+    console.log(`\nRetrying request with payment signature...`);
+
+    const retryResponse = await fetch(url, {
+      headers: {
+        'x-payment-signature': signature,
+      },
+    });
+
+    if (retryResponse.ok) {
+      console.log(`✅ Success! Response received.\n`);
+      const data = await retryResponse.text();
+      console.log(data);
+    } else {
+      console.error(`❌ Request failed: ${retryResponse.status} ${retryResponse.statusText}`);
+    }
+
+  } catch (error: any) {
+    console.error('❌ Error:', error.message);
+    process.exit(1);
+  }
+}
+
+async function x402Auto(args: string[]) {
+  // x402 auto <url-pattern>
+  const urlIdx = args.indexOf('auto') + 1;
+  if (urlIdx >= args.length) {
+    console.error('Usage: usdc-cli x402 auto <url-pattern>');
+    process.exit(1);
+  }
+
+  const urlPattern = args[urlIdx];
+
+  console.log(`🤖 Auto-pay mode enabled for: ${urlPattern}`);
+  console.log(`   Max amount: 1.00 USDC per request`);
+  console.log(`   All future requests to this pattern will auto-pay.`);
+  console.log(`\n   (This is a demo - auto-pay config would be persisted)`);
+}
+
+async function x402Receipts() {
+  console.log('📄 Recent 402 Payments:\n');
+  console.log('─'.repeat(60));
+
+  // Load receipts from x402-client cache
+  const { X402Client } = await import('../lib/x402-client');
+  const client = new X402Client({
+    wallet: getClient(),
+  });
+
+  const receipts = await client.getReceiptHistory();
+
+  if (receipts.length === 0) {
+    console.log('No payment receipts found.');
+    return;
+  }
+
+  let totalAmount = 0;
+  for (const receipt of receipts.slice(0, 10)) {
+    const amount = parseFloat(receipt.challenge.amount);
+    totalAmount += amount;
+
+    console.log(`📄 ${receipt.challenge.amount} USDC → ${receipt.url}`);
+    console.log(`   ${receipt.challenge.description}`);
+    console.log(`   Paid: ${new Date(receipt.paidAt).toLocaleString()}`);
+    console.log(`   TX: ${receipt.txHash}`);
+    console.log();
+  }
+
+  console.log('─'.repeat(60));
+  console.log(`Total: ${totalAmount.toFixed(2)} USDC in ${receipts.length} payments`);
+}
+
+async function x402Command(args: string[]) {
+  const subcommand = args[1]?.toLowerCase();
+
+  switch (subcommand) {
+    case 'pay':
+      await x402Pay(args);
+      break;
+    case 'auto':
+      await x402Auto(args);
+      break;
+    case 'receipts':
+      await x402Receipts();
+      break;
+    default:
+      console.log(`
+x402 Payment Commands:
+
+  usdc-cli x402 pay <url>        Pay for a 402-protected resource
+  usdc-cli x402 auto <pattern>   Enable auto-pay for URL pattern
+  usdc-cli x402 receipts         Show payment history
+
+Examples:
+  usdc-cli x402 pay https://api.example.com/premium
+  usdc-cli x402 auto https://api.example.com/*
+  usdc-cli x402 receipts
+      `);
+  }
+}
+
 function showHelp() {
   console.log(`
 USDC Agent CLI - Manage USDC via Circle Programmable Wallets
@@ -270,6 +429,11 @@ Commands:
   wallets              List managed wallets
   setup                Create initial wallet set
 
+x402 Payment Commands:
+  x402 pay <url>       Pay for a 402-protected resource
+  x402 auto <pattern>  Enable auto-pay for URL pattern
+  x402 receipts        Show payment history
+
 Environment:
   CIRCLE_API_KEY       Your Circle API key
   CIRCLE_ENTITY_SECRET Your entity secret
@@ -279,6 +443,7 @@ Examples:
   usdc-cli send 10 to 0x1234...abcd
   usdc-cli bridge 25 from eth to matic
   usdc-cli receive
+  usdc-cli x402 pay https://api.example.com/premium
 
 Get credentials: https://console.circle.com
   `);
@@ -311,6 +476,9 @@ async function main() {
         break;
       case 'setup':
         await setup();
+        break;
+      case 'x402':
+        await x402Command(args);
         break;
       case 'help':
       case '--help':

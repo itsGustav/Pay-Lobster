@@ -11,10 +11,15 @@
     "balance": "npx ts-node scripts/usdc-cli.ts balance",
     "send": "npx ts-node scripts/usdc-cli.ts send",
     "receive": "npx ts-node scripts/usdc-cli.ts receive",
-    "setup": "npx ts-node scripts/usdc-cli.ts setup"
+    "setup": "npx ts-node scripts/usdc-cli.ts setup",
+    "x402:pay": "npx ts-node scripts/usdc-cli.ts x402 pay",
+    "x402:receipts": "npx ts-node scripts/usdc-cli.ts x402 receipts",
+    "example:x402-client": "npx ts-node examples/x402-client-example.ts",
+    "example:x402-server": "npx ts-node examples/x402-server-example.ts"
   },
   "dependencies": {
-    "@circle-fin/developer-controlled-wallets": "^2.0.0"
+    "@circle-fin/developer-controlled-wallets": "^2.0.0",
+    "express": "^4.18.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
