@@ -3,6 +3,7 @@
  * Now with REAL on-chain contracts! 🦞
  */
 import type { LobsterConfig, Wallet, Transfer, Escrow, TrustScore, Agent, TransferOptions, EscrowOptions, DiscoverOptions, AutonomousConfig } from './types';
+import { SwapOptions, SwapResult, SwapQuote } from './swap';
 export declare class LobsterAgent {
     private config;
     private wallet?;
@@ -136,5 +137,19 @@ export declare class LobsterAgent {
         direction?: string;
         since?: string;
     }): Promise<Transfer[]>;
+    /**
+     * Get a swap quote without executing
+     */
+    getSwapQuote(options: SwapOptions): Promise<SwapQuote>;
+    /**
+     * Execute a token swap (ETH ↔ USDC, etc.)
+     * Uses 0x API for best execution across DEXs
+     */
+    swap(options: SwapOptions): Promise<SwapResult>;
+    /**
+     * Quick swap helpers
+     */
+    swapEthToUsdc(ethAmount: string): Promise<SwapResult>;
+    swapUsdcToEth(usdcAmount: string): Promise<SwapResult>;
 }
 //# sourceMappingURL=agent.d.ts.map

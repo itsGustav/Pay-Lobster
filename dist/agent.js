@@ -9,6 +9,7 @@ const ethers_1 = require("ethers");
 const contracts_1 = require("./contracts");
 const analytics_1 = require("./analytics");
 const usernames_1 = require("./usernames");
+const swap_1 = require("./swap");
 const BASE_RPC = 'https://mainnet.base.org';
 const USDC_BASE = contracts_1.CONTRACTS.usdc;
 class LobsterAgent {
@@ -476,6 +477,38 @@ class LobsterAgent {
             console.error('History error:', e);
             return [];
         }
+    }
+    // ============================================
+    // SWAP METHODS (Powered by 0x)
+    // ============================================
+    /**
+     * Get a swap quote without executing
+     */
+    async getSwapQuote(options) {
+        return (0, swap_1.getSwapQuote)(options);
+    }
+    /**
+     * Execute a token swap (ETH ↔ USDC, etc.)
+     * Uses 0x API for best execution across DEXs
+     */
+    async swap(options) {
+        if (!this.signer) {
+            throw new Error('No signer available. Provide privateKey to execute swaps.');
+        }
+        console.log(`🦞 Initiating swap: ${options.amount} ${options.from} → ${options.to}`);
+        const result = await (0, swap_1.executeSwap)(this.signer, options);
+        // Track the swap
+        analytics_1.analytics.trackTransaction('swap', options.amount, `${options.from}→${options.to}`, result.hash);
+        return result;
+    }
+    /**
+     * Quick swap helpers
+     */
+    async swapEthToUsdc(ethAmount) {
+        return this.swap({ from: 'ETH', to: 'USDC', amount: ethAmount });
+    }
+    async swapUsdcToEth(usdcAmount) {
+        return this.swap({ from: 'USDC', to: 'ETH', amount: usdcAmount });
     }
 }
 exports.LobsterAgent = LobsterAgent;

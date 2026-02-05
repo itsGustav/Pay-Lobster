@@ -19,6 +19,7 @@ import type {
 import { CONTRACTS, ESCROW_ABI, REGISTRY_ABI, ERC20_ABI, EscrowStatus } from './contracts';
 import { analytics } from './analytics';
 import { resolveUsername, ResolvedAddress } from './usernames';
+import { executeSwap, getSwapQuote, SwapOptions, SwapResult, SwapQuote } from './swap';
 
 const BASE_RPC = 'https://mainnet.base.org';
 const USDC_BASE = CONTRACTS.usdc;
@@ -561,5 +562,46 @@ export class LobsterAgent {
       console.error('History error:', e);
       return [];
     }
+  }
+
+  // ============================================
+  // SWAP METHODS (Powered by 0x)
+  // ============================================
+
+  /**
+   * Get a swap quote without executing
+   */
+  async getSwapQuote(options: SwapOptions): Promise<SwapQuote> {
+    return getSwapQuote(options);
+  }
+
+  /**
+   * Execute a token swap (ETH ↔ USDC, etc.)
+   * Uses 0x API for best execution across DEXs
+   */
+  async swap(options: SwapOptions): Promise<SwapResult> {
+    if (!this.signer) {
+      throw new Error('No signer available. Provide privateKey to execute swaps.');
+    }
+
+    console.log(`🦞 Initiating swap: ${options.amount} ${options.from} → ${options.to}`);
+    
+    const result = await executeSwap(this.signer, options);
+    
+    // Track the swap
+    analytics.trackTransaction('swap', options.amount, `${options.from}→${options.to}`, result.hash);
+    
+    return result;
+  }
+
+  /**
+   * Quick swap helpers
+   */
+  async swapEthToUsdc(ethAmount: string): Promise<SwapResult> {
+    return this.swap({ from: 'ETH', to: 'USDC', amount: ethAmount });
+  }
+
+  async swapUsdcToEth(usdcAmount: string): Promise<SwapResult> {
+    return this.swap({ from: 'USDC', to: 'ETH', amount: usdcAmount });
   }
 }
