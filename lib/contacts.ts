@@ -605,7 +605,7 @@ export function mockContactVerification(contact: Contact): ContactVerificationRe
       transactionCount: contact.transactionCount,
       firstSeen: contact.createdAt,
       lastSeen: contact.lastTransactionAt || contact.createdAt,
-      interactedWith: Math.floor(Math.random() * 50) + 5,
+      interactedWith: contact.transactionCount || 1,
     },
     verified: true,
     verifiedAt: new Date().toISOString(),
