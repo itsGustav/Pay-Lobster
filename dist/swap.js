@@ -2,6 +2,9 @@
 /**
  * Pay Lobster Swap Module
  * Powered by 0x API for best execution across DEXs
+ *
+ * 💎 PREMIUM FEATURE (currently free during launch)
+ * Future: Will require Pro tier subscription
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getSwapQuote = getSwapQuote;

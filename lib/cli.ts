@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import { ethers } from 'ethers';
+import { getSwapQuote, executeSwap } from './swap';
 
 // Colors for terminal output
 const colors = {
@@ -317,6 +318,8 @@ ${c.bright}COMMANDS${c.reset}
   ${c.cyan}balance${c.reset}               Check USDC balance
   ${c.cyan}send <amount> <to>${c.reset}    Send USDC to address or agent
   ${c.cyan}receive${c.reset}               Show your wallet address
+  ${c.cyan}swap <amt> <from> to <to>${c.reset}  Swap tokens (ETH/USDC)
+  ${c.cyan}quote <from> <to>${c.reset}     Get swap quote
   ${c.cyan}escrow create${c.reset}         Create new escrow
   ${c.cyan}escrow list${c.reset}           List your escrows
   ${c.cyan}escrow release <id>${c.reset}   Release escrow funds
@@ -429,6 +432,123 @@ function showReceive(): void {
   console.log(`${c.dim}Send USDC on Base to this address.${c.reset}\n`);
 }
 
+// Handle swap command: paylobster swap 0.01 ETH to USDC
+async function handleSwap(args: string[]): Promise<void> {
+  const config = loadConfig();
+  
+  if (!config.privateKey) {
+    console.log(`${c.red}✗${c.reset} No wallet configured. Run ${c.cyan}paylobster setup${c.reset} first.`);
+    return;
+  }
+  
+  // Parse: swap <amount> <from> to <to>
+  // Example: swap 0.01 ETH to USDC
+  if (args.length < 4) {
+    console.log(`\n${c.bright}Usage:${c.reset} paylobster swap <amount> <from> to <to>\n`);
+    console.log(`${c.dim}Examples:${c.reset}`);
+    console.log(`  ${c.cyan}paylobster swap 0.01 ETH to USDC${c.reset}`);
+    console.log(`  ${c.cyan}paylobster swap 50 USDC to ETH${c.reset}\n`);
+    return;
+  }
+  
+  const amount = args[0];
+  const fromToken = args[1].toUpperCase();
+  const toToken = args[3]?.toUpperCase() || args[2]?.toUpperCase();
+  
+  if (!amount || !fromToken || !toToken) {
+    console.log(`${c.red}✗${c.reset} Invalid swap format. Use: swap <amount> <from> to <to>`);
+    return;
+  }
+  
+  console.log(`\n${c.bright}🦞 Pay Lobster Swap${c.reset}\n`);
+  
+  try {
+    // Get quote first
+    console.log(`${c.dim}Getting quote for ${amount} ${fromToken} → ${toToken}...${c.reset}\n`);
+    
+    const quote = await getSwapQuote({
+      from: fromToken,
+      to: toToken,
+      amount: amount,
+    });
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}Swap Quote${c.reset}                        ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Sell: ${c.yellow}${quote.sellAmount.padStart(15)} ${quote.sellToken}${c.reset}    ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Buy:  ${c.green}${parseFloat(quote.buyAmount).toFixed(6).padStart(15)} ${quote.buyToken}${c.reset}    ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Rate: ${c.dim}1 ${quote.sellToken} = ${quote.price} ${quote.buyToken}${c.reset} ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────┘${c.reset}`);
+    
+    if (quote.sources.length > 0) {
+      console.log(`\n${c.dim}Route: ${quote.sources.map(s => s.name).join(' → ')}${c.reset}`);
+    }
+    
+    // Execute swap
+    console.log(`\n${c.dim}Executing swap...${c.reset}`);
+    
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const signer = new ethers.Wallet(config.privateKey, provider);
+    
+    const result = await executeSwap(signer, {
+      from: fromToken,
+      to: toToken,
+      amount: amount,
+    });
+    
+    console.log(`\n${c.green}✓ Swap Complete!${c.reset}\n`);
+    console.log(`  ${c.dim}TX:${c.reset} ${c.cyan}${result.hash}${c.reset}`);
+    console.log(`  ${c.dim}Sold:${c.reset} ${result.fromAmount} ${result.fromToken}`);
+    console.log(`  ${c.dim}Bought:${c.reset} ${c.green}${result.toAmount} ${result.toToken}${c.reset}`);
+    console.log(`\n  ${c.dim}View: https://basescan.org/tx/${result.hash}${c.reset}\n`);
+    
+  } catch (e: any) {
+    console.log(`\n${c.red}✗${c.reset} Swap failed: ${e.message}\n`);
+  }
+}
+
+// Handle quote command: paylobster quote ETH USDC
+async function handleQuote(args: string[]): Promise<void> {
+  if (args.length < 2) {
+    console.log(`\n${c.bright}Usage:${c.reset} paylobster quote <from> <to> [amount]\n`);
+    console.log(`${c.dim}Examples:${c.reset}`);
+    console.log(`  ${c.cyan}paylobster quote ETH USDC${c.reset}        ${c.dim}(quote for 1 ETH)${c.reset}`);
+    console.log(`  ${c.cyan}paylobster quote ETH USDC 0.5${c.reset}    ${c.dim}(quote for 0.5 ETH)${c.reset}\n`);
+    return;
+  }
+  
+  const fromToken = args[0].toUpperCase();
+  const toToken = args[1].toUpperCase();
+  const amount = args[2] || '1';
+  
+  console.log(`\n${c.dim}Getting quote for ${amount} ${fromToken} → ${toToken}...${c.reset}\n`);
+  
+  try {
+    const quote = await getSwapQuote({
+      from: fromToken,
+      to: toToken,
+      amount: amount,
+    });
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}💱 Swap Quote${c.reset}                     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Sell: ${c.yellow}${quote.sellAmount.padStart(15)} ${quote.sellToken}${c.reset}    ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Buy:  ${c.green}${parseFloat(quote.buyAmount).toFixed(6).padStart(15)} ${quote.buyToken}${c.reset}    ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Rate: ${c.bright}1 ${quote.sellToken} = ${quote.price} ${quote.buyToken}${c.reset}  ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────┘${c.reset}`);
+    
+    if (quote.sources.length > 0) {
+      console.log(`\n${c.dim}Best route: ${quote.sources.map(s => s.name).join(' + ')}${c.reset}`);
+    }
+    console.log();
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Quote failed: ${e.message}\n`);
+  }
+}
+
 // Main CLI entry point
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -497,6 +617,14 @@ async function main(): Promise<void> {
     case 'register':
       console.log(`\n${c.yellow}⚠${c.reset}  Register command coming soon!`);
       console.log(`${c.dim}For now, register directly via the contract.${c.reset}\n`);
+      break;
+    
+    case 'swap':
+      await handleSwap(args.slice(1));
+      break;
+    
+    case 'quote':
+      await handleQuote(args.slice(1));
       break;
       
     default:
