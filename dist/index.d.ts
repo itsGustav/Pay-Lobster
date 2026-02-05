@@ -7,5 +7,6 @@
 export { LobsterAgent } from './agent';
 export { createLobsterAgent, quickStart } from './easy';
 export * from './types';
+export { resolveUsername, registerUsername, getUsername, listUsernames } from './usernames';
 export { LobsterAgent as default } from './agent';
 //# sourceMappingURL=index.d.ts.map

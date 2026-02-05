@@ -18,6 +18,7 @@ import type {
 } from './types';
 import { CONTRACTS, ESCROW_ABI, REGISTRY_ABI, ERC20_ABI, EscrowStatus } from './contracts';
 import { analytics } from './analytics';
+import { resolveUsername, ResolvedAddress } from './usernames';
 
 const BASE_RPC = 'https://mainnet.base.org';
 const USDC_BASE = CONTRACTS.usdc;
@@ -169,9 +170,18 @@ export class LobsterAgent {
       throw new Error('Provider not initialized. Call initialize() first.');
     }
 
-    // Validate address
+    // Resolve username/basename to address
+    let recipientAddress = options.to;
+    let resolvedName: string | undefined;
+    
     if (!ethers.isAddress(options.to)) {
-      throw new Error(`Invalid recipient address: ${options.to}`);
+      const resolved = await resolveUsername(options.to, this.provider);
+      if (!resolved) {
+        throw new Error(`Could not resolve "${options.to}" to an address. Try @username, name.base.eth, or 0x...`);
+      }
+      recipientAddress = resolved.address;
+      resolvedName = resolved.name;
+      console.log(`🔍 Resolved ${options.to} → ${recipientAddress} (via ${resolved.source})`);
     }
 
     // Parse amount (USDC has 6 decimals)
@@ -186,11 +196,12 @@ export class LobsterAgent {
       throw new Error(`Insufficient balance. Have: ${balanceFormatted} USDC, Need: ${options.amount} USDC`);
     }
 
-    console.log(`🦞 Sending ${options.amount} USDC to ${options.to}...`);
+    const displayTo = resolvedName || recipientAddress;
+    console.log(`🦞 Sending ${options.amount} USDC to ${displayTo}...`);
 
     try {
       // Execute the transfer
-      const tx = await usdc.transfer(options.to, amount);
+      const tx = await usdc.transfer(recipientAddress, amount);
       console.log(`📤 Transaction submitted: ${tx.hash}`);
       
       // Wait for confirmation
@@ -198,14 +209,15 @@ export class LobsterAgent {
       console.log(`✅ Confirmed in block ${receipt.blockNumber}`);
 
       // Track successful transaction
-      analytics.trackTransaction('send', options.amount, options.to, tx.hash);
+      analytics.trackTransaction('send', options.amount, recipientAddress, tx.hash);
 
       return {
         id: tx.hash,
         hash: tx.hash,
         status: receipt.status === 1 ? 'confirmed' : 'failed',
         amount: options.amount,
-        to: options.to,
+        to: recipientAddress,
+        toName: resolvedName,
         from: this.signer.address,
         memo: options.memo,
         createdAt: new Date().toISOString()

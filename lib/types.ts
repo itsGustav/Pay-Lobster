@@ -31,6 +31,7 @@ export interface Transfer {
   status: 'pending' | 'confirmed' | 'failed';
   amount: string;
   to: string;
+  toName?: string;
   from: string;
   memo?: string;
   createdAt: string;

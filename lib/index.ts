@@ -8,6 +8,7 @@
 export { LobsterAgent } from './agent';
 export { createLobsterAgent, quickStart } from './easy';
 export * from './types';
+export { resolveUsername, registerUsername, getUsername, listUsernames } from './usernames';
 
 // Default export for convenience
 export { LobsterAgent as default } from './agent';

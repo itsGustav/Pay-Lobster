@@ -8,6 +8,7 @@ exports.LobsterAgent = void 0;
 const ethers_1 = require("ethers");
 const contracts_1 = require("./contracts");
 const analytics_1 = require("./analytics");
+const usernames_1 = require("./usernames");
 const BASE_RPC = 'https://mainnet.base.org';
 const USDC_BASE = contracts_1.CONTRACTS.usdc;
 class LobsterAgent {
@@ -135,9 +136,17 @@ class LobsterAgent {
         if (!this.provider) {
             throw new Error('Provider not initialized. Call initialize() first.');
         }
-        // Validate address
+        // Resolve username/basename to address
+        let recipientAddress = options.to;
+        let resolvedName;
         if (!ethers_1.ethers.isAddress(options.to)) {
-            throw new Error(`Invalid recipient address: ${options.to}`);
+            const resolved = await (0, usernames_1.resolveUsername)(options.to, this.provider);
+            if (!resolved) {
+                throw new Error(`Could not resolve "${options.to}" to an address. Try @username, name.base.eth, or 0x...`);
+            }
+            recipientAddress = resolved.address;
+            resolvedName = resolved.name;
+            console.log(`🔍 Resolved ${options.to} → ${recipientAddress} (via ${resolved.source})`);
         }
         // Parse amount (USDC has 6 decimals)
         const amount = ethers_1.ethers.parseUnits(options.amount, 6);
@@ -148,22 +157,24 @@ class LobsterAgent {
             const balanceFormatted = ethers_1.ethers.formatUnits(balance, 6);
             throw new Error(`Insufficient balance. Have: ${balanceFormatted} USDC, Need: ${options.amount} USDC`);
         }
-        console.log(`🦞 Sending ${options.amount} USDC to ${options.to}...`);
+        const displayTo = resolvedName || recipientAddress;
+        console.log(`🦞 Sending ${options.amount} USDC to ${displayTo}...`);
         try {
             // Execute the transfer
-            const tx = await usdc.transfer(options.to, amount);
+            const tx = await usdc.transfer(recipientAddress, amount);
             console.log(`📤 Transaction submitted: ${tx.hash}`);
             // Wait for confirmation
             const receipt = await tx.wait();
             console.log(`✅ Confirmed in block ${receipt.blockNumber}`);
             // Track successful transaction
-            analytics_1.analytics.trackTransaction('send', options.amount, options.to, tx.hash);
+            analytics_1.analytics.trackTransaction('send', options.amount, recipientAddress, tx.hash);
             return {
                 id: tx.hash,
                 hash: tx.hash,
                 status: receipt.status === 1 ? 'confirmed' : 'failed',
                 amount: options.amount,
-                to: options.to,
+                to: recipientAddress,
+                toName: resolvedName,
                 from: this.signer.address,
                 memo: options.memo,
                 createdAt: new Date().toISOString()

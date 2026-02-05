@@ -20,13 +20,18 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.default = exports.quickStart = exports.createLobsterAgent = exports.LobsterAgent = void 0;
+exports.default = exports.listUsernames = exports.getUsername = exports.registerUsername = exports.resolveUsername = exports.quickStart = exports.createLobsterAgent = exports.LobsterAgent = void 0;
 var agent_1 = require("./agent");
 Object.defineProperty(exports, "LobsterAgent", { enumerable: true, get: function () { return agent_1.LobsterAgent; } });
 var easy_1 = require("./easy");
 Object.defineProperty(exports, "createLobsterAgent", { enumerable: true, get: function () { return easy_1.createLobsterAgent; } });
 Object.defineProperty(exports, "quickStart", { enumerable: true, get: function () { return easy_1.quickStart; } });
 __exportStar(require("./types"), exports);
+var usernames_1 = require("./usernames");
+Object.defineProperty(exports, "resolveUsername", { enumerable: true, get: function () { return usernames_1.resolveUsername; } });
+Object.defineProperty(exports, "registerUsername", { enumerable: true, get: function () { return usernames_1.registerUsername; } });
+Object.defineProperty(exports, "getUsername", { enumerable: true, get: function () { return usernames_1.getUsername; } });
+Object.defineProperty(exports, "listUsernames", { enumerable: true, get: function () { return usernames_1.listUsernames; } });
 // Default export for convenience
 var agent_2 = require("./agent");
 Object.defineProperty(exports, "default", { enumerable: true, get: function () { return agent_2.LobsterAgent; } });
