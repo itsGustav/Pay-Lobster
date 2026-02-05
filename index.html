@@ -2535,153 +2535,38 @@
     <div class="container">
       <div class="section-header">
         <span class="section-label">Get Started</span>
-        <h2 class="section-title">Up and running in minutes</h2>
-        <p class="section-subtitle">Choose your path based on how you'll use Pay Lobster.</p>
+        <h2 class="section-title">Up and running in 30 seconds</h2>
+        <p class="section-subtitle">One install. Real USDC. No setup required.</p>
       </div>
       
       <div class="tabs-container">
-        <div class="tabs-header">
-          <button class="tab-btn active" data-tab="humans">👤 For Humans</button>
-          <button class="tab-btn" data-tab="agents">🤖 For AI Agents</button>
-          <button class="tab-btn" data-tab="devs">💻 For Developers</button>
-        </div>
-        
-        <div class="tab-panel active" id="tab-humans">
-          <div class="setup-grid">
-            <div class="setup-steps">
-              <div class="setup-step">
-                <div class="step-number">1</div>
-                <div class="step-content">
-                  <h4>Get Circle Credentials</h4>
-                  <p>Sign up at <a href="https://console.circle.com" target="_blank">console.circle.com</a> and create an API key and entity secret.</p>
-                </div>
-              </div>
-              <div class="setup-step">
-                <div class="step-number">2</div>
-                <div class="step-content">
-                  <h4>Set Environment Variables</h4>
-                  <p>Configure your credentials as environment variables for secure access.</p>
-                </div>
-              </div>
-              <div class="setup-step">
-                <div class="step-number">3</div>
-                <div class="step-content">
-                  <h4>Run Commands</h4>
-                  <p>Use the CLI to check balances, send USDC, and manage your wallet.</p>
-                </div>
-              </div>
-            </div>
-            <div class="code-block">
-              <div class="code-block-header">
-                <span class="code-block-title">Terminal</span>
-                <button class="code-block-copy">Copy</button>
-              </div>
-              <pre><code><span class="code-comment"># Set credentials</span>
-<span class="code-keyword">export</span> CIRCLE_API_KEY=<span class="code-string">"your-key"</span>
-<span class="code-keyword">export</span> CIRCLE_ENTITY_SECRET=<span class="code-string">"your-secret"</span>
-
-<span class="code-comment"># Install</span>
+        <div class="code-block" style="max-width: 700px; margin: 0 auto;">
+          <div class="code-block-header">
+            <span class="code-block-title">Terminal</span>
+            <button class="code-block-copy" onclick="navigator.clipboard.writeText('npm install pay-lobster\nnpx pay-lobster balance 0xYourWallet')">Copy</button>
+          </div>
+          <pre><code><span class="code-comment"># Install Pay Lobster</span>
 npm install pay-lobster
 
-<span class="code-comment"># Check balance</span>
-npx pay-lobster balance
+<span class="code-comment"># Check any wallet balance (no setup needed!)</span>
+npx pay-lobster balance 0xf775f0224A680E2915a066e53A389d0335318b7B
 
-<span class="code-comment"># Send USDC</span>
-npx pay-lobster send 0x... 100</code></pre>
-            </div>
-          </div>
+<span class="code-comment"># Output: 💰 Balance: 0.00 USDC on Base mainnet</span>
+
+<span class="code-comment"># That's it. You're live. 🦞</span></code></pre>
         </div>
         
-        <div class="tab-panel" id="tab-agents">
-          <div class="setup-grid">
-            <div class="setup-steps">
-              <div class="setup-step">
-                <div class="step-number">1</div>
-                <div class="step-content">
-                  <h4>Install the SDK</h4>
-                  <p>Clone the repo and install dependencies with npm.</p>
-                </div>
-              </div>
-              <div class="setup-step">
-                <div class="step-number">2</div>
-                <div class="step-content">
-                  <h4>Initialize Your Agent</h4>
-                  <p>Create a Pay Lobster with one function call. Optionally register for on-chain identity.</p>
-                </div>
-              </div>
-              <div class="setup-step">
-                <div class="step-number">3</div>
-                <div class="step-content">
-                  <h4>Start Transacting</h4>
-                  <p>Send payments, pay for APIs, create escrows, and build trust.</p>
-                </div>
-              </div>
-            </div>
-            <div class="code-block">
-              <div class="code-block-header">
-                <span class="code-block-title">agent.ts</span>
-                <button class="code-block-copy">Copy</button>
-              </div>
-              <pre><code><span class="code-keyword">import</span> { LobsterAgent, quickStart } <span class="code-keyword">from</span> <span class="code-string">'pay-lobster'</span>;
-
-<span class="code-keyword">const</span> agent = <span class="code-keyword">await</span> <span class="code-function">quickStart</span>({
-  circleApiKey: process.env.CIRCLE_API_KEY
-});
-
-<span class="code-comment">// Check balance</span>
-<span class="code-keyword">await</span> agent.<span class="code-function">balance</span>(); <span class="code-comment">// "1000"</span>
-
-<span class="code-comment">// Send payment</span>
-<span class="code-keyword">await</span> agent.<span class="code-function">send</span>(<span class="code-string">'0x...'</span>, <span class="code-string">'100'</span>);
-
-<span class="code-comment">// Pay for API (x402)</span>
-<span class="code-keyword">await</span> agent.<span class="code-function">pay</span>(<span class="code-string">'https://api.example.com'</span>);</code></pre>
-            </div>
-          </div>
-        </div>
-        
-        <div class="tab-panel" id="tab-devs">
-          <div class="setup-grid">
-            <div class="setup-steps">
-              <div class="setup-step">
-                <div class="step-number">1</div>
-                <div class="step-content">
-                  <h4>Clone & Install</h4>
-                  <p>Get the full source code and install all dependencies.</p>
-                </div>
-              </div>
-              <div class="setup-step">
-                <div class="step-number">2</div>
-                <div class="step-content">
-                  <h4>Import Modules</h4>
-                  <p>Use individual modules for fine-grained control over each feature.</p>
-                </div>
-              </div>
-              <div class="setup-step">
-                <div class="step-number">3</div>
-                <div class="step-content">
-                  <h4>Build & Extend</h4>
-                  <p>Full TypeScript support. MIT licensed. Extend as needed.</p>
-                </div>
-              </div>
-            </div>
-            <div class="code-block">
-              <div class="code-block-header">
-                <span class="code-block-title">advanced.ts</span>
-                <button class="code-block-copy">Copy</button>
-              </div>
-              <pre><code><span class="code-comment">// Individual module imports</span>
-<span class="code-keyword">import</span> { CircleClient } <span class="code-keyword">from</span> <span class="code-string">'./lib/circle-client'</span>;
-<span class="code-keyword">import</span> { X402Client } <span class="code-keyword">from</span> <span class="code-string">'./lib/x402-client'</span>;
-<span class="code-keyword">import</span> { ERC8004Client } <span class="code-keyword">from</span> <span class="code-string">'./lib/erc8004'</span>;
-<span class="code-keyword">import</span> { EscrowManager } <span class="code-keyword">from</span> <span class="code-string">'./lib/escrow'</span>;
-
-<span class="code-comment">// Full control over each component</span>
-<span class="code-keyword">const</span> circle = <span class="code-keyword">new</span> <span class="code-function">CircleClient</span>(config);
-<span class="code-keyword">const</span> x402 = <span class="code-keyword">new</span> <span class="code-function">X402Client</span>({ circleClient });
-<span class="code-keyword">const</span> trust = <span class="code-keyword">new</span> <span class="code-function">ERC8004Client</span>({ chain });
-<span class="code-keyword">const</span> escrow = <span class="code-keyword">new</span> <span class="code-function">EscrowManager</span>({ circleClient });</code></pre>
-            </div>
+        <div style="text-align: center; margin-top: 32px;">
+          <p style="color: var(--gray-400); font-size: 15px; margin-bottom: 20px;">
+            💡 Want to send payments? <a href="/docs/documentation.html#setup" style="color: var(--primary-light);">Add your wallet credentials →</a>
+          </p>
+          <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+            <a href="https://www.npmjs.com/package/pay-lobster" target="_blank" class="btn btn-secondary">
+              <span>📦</span> View on npm
+            </a>
+            <a href="https://github.com/itsGustav/lobster-pay" target="_blank" class="btn btn-secondary">
+              <span>⭐</span> Star on GitHub
+            </a>
           </div>
         </div>
       </div>
