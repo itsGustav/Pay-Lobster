@@ -204,6 +204,58 @@ class LobsterAgent {
         return this.transfer({ to, amount: amount.toString() });
     }
     /**
+     * Send ETH (not USDC) - for gas or native transfers
+     */
+    async sendEth(options) {
+        if (!this.signer) {
+            throw new Error('No signer available. Provide privateKey to send ETH.');
+        }
+        // Resolve username if needed
+        let recipientAddress = options.to;
+        let resolvedName;
+        if (!ethers_1.ethers.isAddress(options.to)) {
+            const resolved = await (0, usernames_1.resolveUsername)(options.to, this.provider);
+            if (!resolved) {
+                throw new Error(`Could not resolve "${options.to}" to an address.`);
+            }
+            recipientAddress = resolved.address;
+            resolvedName = resolved.name;
+        }
+        const amount = ethers_1.ethers.parseEther(options.amount);
+        // Check balance
+        const balance = await this.provider.getBalance(this.signer.address);
+        if (balance < amount) {
+            const balanceFormatted = ethers_1.ethers.formatEther(balance);
+            throw new Error(`Insufficient ETH. Have: ${balanceFormatted}, Need: ${options.amount}`);
+        }
+        const displayTo = resolvedName || recipientAddress;
+        console.log(`🦞 Sending ${options.amount} ETH to ${displayTo}...`);
+        try {
+            const tx = await this.signer.sendTransaction({
+                to: recipientAddress,
+                value: amount,
+            });
+            console.log(`📤 Transaction submitted: ${tx.hash}`);
+            const receipt = await tx.wait();
+            console.log(`✅ Confirmed in block ${receipt?.blockNumber}`);
+            return {
+                id: tx.hash,
+                hash: tx.hash,
+                status: receipt?.status === 1 ? 'confirmed' : 'failed',
+                amount: options.amount,
+                to: recipientAddress,
+                toName: resolvedName,
+                from: this.signer.address,
+                memo: options.memo,
+                createdAt: new Date().toISOString()
+            };
+        }
+        catch (error) {
+            console.error(`❌ ETH transfer failed: ${error.message}`);
+            throw new Error(`ETH transfer failed: ${error.message}`);
+        }
+    }
+    /**
      * Create an escrow - REAL on-chain! 🦞
      */
     async createEscrow(options) {

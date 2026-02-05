@@ -49,6 +49,14 @@ export declare class LobsterAgent {
      */
     send(to: string, amount: number | string): Promise<Transfer>;
     /**
+     * Send ETH (not USDC) - for gas or native transfers
+     */
+    sendEth(options: {
+        to: string;
+        amount: string;
+        memo?: string;
+    }): Promise<Transfer>;
+    /**
      * Create an escrow - REAL on-chain! 🦞
      */
     createEscrow(options: EscrowOptions): Promise<Escrow>;

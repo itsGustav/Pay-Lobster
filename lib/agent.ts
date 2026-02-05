@@ -250,6 +250,66 @@ export class LobsterAgent {
   }
 
   /**
+   * Send ETH (not USDC) - for gas or native transfers
+   */
+  async sendEth(options: { to: string; amount: string; memo?: string }): Promise<Transfer> {
+    if (!this.signer) {
+      throw new Error('No signer available. Provide privateKey to send ETH.');
+    }
+
+    // Resolve username if needed
+    let recipientAddress = options.to;
+    let resolvedName: string | undefined;
+    
+    if (!ethers.isAddress(options.to)) {
+      const resolved = await resolveUsername(options.to, this.provider);
+      if (!resolved) {
+        throw new Error(`Could not resolve "${options.to}" to an address.`);
+      }
+      recipientAddress = resolved.address;
+      resolvedName = resolved.name;
+    }
+
+    const amount = ethers.parseEther(options.amount);
+    
+    // Check balance
+    const balance = await this.provider!.getBalance(this.signer.address);
+    if (balance < amount) {
+      const balanceFormatted = ethers.formatEther(balance);
+      throw new Error(`Insufficient ETH. Have: ${balanceFormatted}, Need: ${options.amount}`);
+    }
+
+    const displayTo = resolvedName || recipientAddress;
+    console.log(`🦞 Sending ${options.amount} ETH to ${displayTo}...`);
+
+    try {
+      const tx = await this.signer.sendTransaction({
+        to: recipientAddress,
+        value: amount,
+      });
+      console.log(`📤 Transaction submitted: ${tx.hash}`);
+      
+      const receipt = await tx.wait();
+      console.log(`✅ Confirmed in block ${receipt?.blockNumber}`);
+
+      return {
+        id: tx.hash,
+        hash: tx.hash,
+        status: receipt?.status === 1 ? 'confirmed' : 'failed',
+        amount: options.amount,
+        to: recipientAddress,
+        toName: resolvedName,
+        from: this.signer.address,
+        memo: options.memo,
+        createdAt: new Date().toISOString()
+      };
+    } catch (error: any) {
+      console.error(`❌ ETH transfer failed: ${error.message}`);
+      throw new Error(`ETH transfer failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Create an escrow - REAL on-chain! 🦞
    */
   async createEscrow(options: EscrowOptions): Promise<Escrow> {
