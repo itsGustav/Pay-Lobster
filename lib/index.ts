@@ -11,6 +11,8 @@ export * from './types';
 export { resolveUsername, registerUsername, getUsername, listUsernames } from './usernames';
 export { getSwapQuote, executeSwap, getPrice, getSupportedTokens } from './swap';
 export type { SwapQuote, SwapOptions, SwapResult } from './swap';
+export { stats, loadStats, recordTransfer, recordEscrow, getStatsSummary, getLeaderboard } from './stats';
+export type { PayLobsterStats, WalletStats } from './stats';
 
 // Default export for convenience
 export { LobsterAgent as default } from './agent';

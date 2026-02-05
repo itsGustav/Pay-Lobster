@@ -20,6 +20,7 @@ import { CONTRACTS, ESCROW_ABI, REGISTRY_ABI, ERC20_ABI, EscrowStatus } from './
 import { analytics } from './analytics';
 import { resolveUsername, ResolvedAddress } from './usernames';
 import { executeSwap, getSwapQuote, SwapOptions, SwapResult, SwapQuote } from './swap';
+import { stats } from './stats';
 
 const BASE_RPC = 'https://mainnet.base.org';
 const USDC_BASE = CONTRACTS.usdc;
@@ -211,6 +212,9 @@ export class LobsterAgent {
 
       // Track successful transaction
       analytics.trackTransaction('send', options.amount, recipientAddress, tx.hash);
+      
+      // Record in global stats
+      stats.recordTransfer(this.signer.address, recipientAddress, options.amount, tx.hash);
 
       return {
         id: tx.hash,
@@ -271,6 +275,9 @@ export class LobsterAgent {
     const escrowId = event ? escrowContract.interface.parseLog(event)?.args[0].toString() : '0';
 
     console.log(`✅ Escrow created: ID ${escrowId}`);
+    
+    // Record in global stats
+    stats.recordEscrow(options.amount);
 
     return {
       id: escrowId,
@@ -603,5 +610,37 @@ export class LobsterAgent {
 
   async swapUsdcToEth(usdcAmount: string): Promise<SwapResult> {
     return this.swap({ from: 'USDC', to: 'ETH', amount: usdcAmount });
+  }
+
+  // ============================================
+  // GLOBAL STATS METHODS
+  // ============================================
+
+  /**
+   * Get global Pay Lobster stats (all transactions across all wallets)
+   */
+  getGlobalStats(): ReturnType<typeof stats.load> {
+    return stats.load();
+  }
+
+  /**
+   * Get formatted stats summary
+   */
+  getStatsSummary(): string {
+    return stats.getSummary();
+  }
+
+  /**
+   * Get leaderboard of top wallets by volume
+   */
+  getLeaderboard(limit: number = 10) {
+    return stats.getLeaderboard(limit);
+  }
+
+  /**
+   * Record a transfer manually (for external tracking)
+   */
+  recordTransfer(from: string, to: string, amount: string, txHash: string) {
+    return stats.recordTransfer(from, to, amount, txHash);
   }
 }

@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as readline from 'readline';
 import { ethers } from 'ethers';
 import { getSwapQuote, executeSwap } from './swap';
+import { stats } from './stats';
 
 // Colors for terminal output
 const colors = {
@@ -326,6 +327,9 @@ ${c.bright}COMMANDS${c.reset}
   ${c.cyan}trust <agent>${c.reset}         Check agent trust score
   ${c.cyan}discover${c.reset}              Find agents by capability
   ${c.cyan}register${c.reset}              Register your agent
+  ${c.cyan}stats${c.reset}                 Show global volume stats
+  ${c.cyan}volume${c.reset}                Alias for stats
+  ${c.cyan}leaderboard${c.reset}           Top wallets by volume
   ${c.cyan}config${c.reset}                Show current configuration
   ${c.cyan}help${c.reset}                  Show this help message
 
@@ -549,6 +553,68 @@ async function handleQuote(args: string[]): Promise<void> {
   }
 }
 
+// Show global volume stats
+function showGlobalStats(): void {
+  const globalStats = stats.load();
+  const today = new Date().toISOString().split('T')[0];
+  const todayVolume = globalStats.dailyVolume[today] || '0';
+  
+  console.log(`
+${c.cyan}┌─────────────────────────────────────────────────┐${c.reset}
+${c.cyan}│${c.reset}     🦞 ${c.bright}PAY LOBSTER GLOBAL STATS${c.reset}              ${c.cyan}│${c.reset}
+${c.cyan}└─────────────────────────────────────────────────┘${c.reset}
+
+${c.bright}💰 Total Volume:${c.reset}         ${c.green}$${formatNumber(globalStats.totalVolume)} USDC${c.reset}
+${c.bright}📊 Transactions:${c.reset}         ${globalStats.totalTransactions.toLocaleString()}
+${c.bright}🔒 Escrow Volume:${c.reset}        ${c.green}$${formatNumber(globalStats.totalEscrowVolume)} USDC${c.reset}
+${c.bright}📝 Escrows Created:${c.reset}      ${globalStats.totalEscrowsCreated}
+
+${c.dim}────────────────────────────────────────${c.reset}
+
+${c.bright}📈 Today's Volume:${c.reset}       ${c.green}$${formatNumber(todayVolume)} USDC${c.reset}
+${c.bright}👥 Tracked Wallets:${c.reset}      ${globalStats.trackedWallets.length}
+
+${c.dim}Last Updated: ${new Date(globalStats.lastUpdated).toLocaleString()}${c.reset}
+${c.dim}Stats stored at: ~/.paylobster/stats.json${c.reset}
+`);
+}
+
+// Show leaderboard of top wallets
+function showLeaderboard(): void {
+  const leaderboard = stats.getLeaderboard(10);
+  
+  console.log(`
+${c.cyan}┌─────────────────────────────────────────────────┐${c.reset}
+${c.cyan}│${c.reset}     🏆 ${c.bright}PAY LOBSTER LEADERBOARD${c.reset}               ${c.cyan}│${c.reset}
+${c.cyan}└─────────────────────────────────────────────────┘${c.reset}
+`);
+
+  if (leaderboard.length === 0) {
+    console.log(`${c.dim}  No transactions recorded yet.${c.reset}`);
+    console.log(`${c.dim}  Start sending USDC to appear here!${c.reset}\n`);
+    return;
+  }
+
+  console.log(`${c.dim}  Rank  Address                Volume         Txs${c.reset}`);
+  console.log(`${c.dim}  ────  ──────────────────────  ─────────────  ───${c.reset}`);
+  
+  for (const entry of leaderboard) {
+    const medal = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : '  ';
+    const addr = entry.address.slice(0, 6) + '...' + entry.address.slice(-4);
+    const vol = ('$' + formatNumber(entry.totalVolume)).padStart(12);
+    console.log(`  ${medal} #${entry.rank}   ${addr}       ${c.green}${vol}${c.reset}     ${entry.transactions}`);
+  }
+  
+  console.log();
+}
+
+function formatNumber(num: string | number): string {
+  const n = typeof num === 'string' ? parseFloat(num) : num;
+  if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(2) + 'K';
+  return n.toFixed(2);
+}
+
 // Main CLI entry point
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -563,8 +629,9 @@ async function main(): Promise<void> {
     return;
   }
   
-  // Check if setup needed
-  if (!config.setupComplete && command !== 'help') {
+  // Check if setup needed (allow some commands without setup)
+  const noSetupRequired = ['help', 'stats', 'volume', 'leaderboard', 'top'];
+  if (!config.setupComplete && !noSetupRequired.includes(command)) {
     console.log(`\n${c.yellow}⚠${c.reset}  Pay Lobster is not configured yet.\n`);
     console.log(`Run ${c.cyan}paylobster setup${c.reset} to get started.\n`);
     return;
@@ -625,6 +692,16 @@ async function main(): Promise<void> {
     
     case 'quote':
       await handleQuote(args.slice(1));
+      break;
+    
+    case 'volume':
+    case 'stats':
+      showGlobalStats();
+      break;
+    
+    case 'leaderboard':
+    case 'top':
+      showLeaderboard();
       break;
       
     default:

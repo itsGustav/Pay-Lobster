@@ -4,6 +4,7 @@
  */
 import type { LobsterConfig, Wallet, Transfer, Escrow, TrustScore, Agent, TransferOptions, EscrowOptions, DiscoverOptions, AutonomousConfig } from './types';
 import { SwapOptions, SwapResult, SwapQuote } from './swap';
+import { stats } from './stats';
 export declare class LobsterAgent {
     private config;
     private wallet?;
@@ -151,5 +152,26 @@ export declare class LobsterAgent {
      */
     swapEthToUsdc(ethAmount: string): Promise<SwapResult>;
     swapUsdcToEth(usdcAmount: string): Promise<SwapResult>;
+    /**
+     * Get global Pay Lobster stats (all transactions across all wallets)
+     */
+    getGlobalStats(): ReturnType<typeof stats.load>;
+    /**
+     * Get formatted stats summary
+     */
+    getStatsSummary(): string;
+    /**
+     * Get leaderboard of top wallets by volume
+     */
+    getLeaderboard(limit?: number): {
+        rank: number;
+        address: string;
+        totalVolume: string;
+        transactions: number;
+    }[];
+    /**
+     * Record a transfer manually (for external tracking)
+     */
+    recordTransfer(from: string, to: string, amount: string, txHash: string): import("./stats").PayLobsterStats;
 }
 //# sourceMappingURL=agent.d.ts.map

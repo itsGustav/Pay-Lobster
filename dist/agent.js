@@ -10,6 +10,7 @@ const contracts_1 = require("./contracts");
 const analytics_1 = require("./analytics");
 const usernames_1 = require("./usernames");
 const swap_1 = require("./swap");
+const stats_1 = require("./stats");
 const BASE_RPC = 'https://mainnet.base.org';
 const USDC_BASE = contracts_1.CONTRACTS.usdc;
 class LobsterAgent {
@@ -169,6 +170,8 @@ class LobsterAgent {
             console.log(`✅ Confirmed in block ${receipt.blockNumber}`);
             // Track successful transaction
             analytics_1.analytics.trackTransaction('send', options.amount, recipientAddress, tx.hash);
+            // Record in global stats
+            stats_1.stats.recordTransfer(this.signer.address, recipientAddress, options.amount, tx.hash);
             return {
                 id: tx.hash,
                 hash: tx.hash,
@@ -224,6 +227,8 @@ class LobsterAgent {
         });
         const escrowId = event ? escrowContract.interface.parseLog(event)?.args[0].toString() : '0';
         console.log(`✅ Escrow created: ID ${escrowId}`);
+        // Record in global stats
+        stats_1.stats.recordEscrow(options.amount);
         return {
             id: escrowId,
             amount: options.amount,
@@ -509,6 +514,33 @@ class LobsterAgent {
     }
     async swapUsdcToEth(usdcAmount) {
         return this.swap({ from: 'USDC', to: 'ETH', amount: usdcAmount });
+    }
+    // ============================================
+    // GLOBAL STATS METHODS
+    // ============================================
+    /**
+     * Get global Pay Lobster stats (all transactions across all wallets)
+     */
+    getGlobalStats() {
+        return stats_1.stats.load();
+    }
+    /**
+     * Get formatted stats summary
+     */
+    getStatsSummary() {
+        return stats_1.stats.getSummary();
+    }
+    /**
+     * Get leaderboard of top wallets by volume
+     */
+    getLeaderboard(limit = 10) {
+        return stats_1.stats.getLeaderboard(limit);
+    }
+    /**
+     * Record a transfer manually (for external tracking)
+     */
+    recordTransfer(from, to, amount, txHash) {
+        return stats_1.stats.recordTransfer(from, to, amount, txHash);
     }
 }
 exports.LobsterAgent = LobsterAgent;
