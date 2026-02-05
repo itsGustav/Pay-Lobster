@@ -1,0 +1,14 @@
+{
+  "id": "6983e7cb126d30a827fcf50f",
+  "name": "Pay Lobster",
+  "description": "Payment infrastructure for AI agents. Send, receive, and escrow USDC on Base.",
+  "url": "https://www.paylobster.com",
+  "icon": "https://www.paylobster.com/icon.png",
+  "category": "defi",
+  "chains": ["base"],
+  "features": ["payments", "escrow", "agent-commerce"],
+  "socials": {
+    "twitter": "https://twitter.com/itsGustav",
+    "github": "https://github.com/itsGustav/Lobster-Pay"
+  }
+}

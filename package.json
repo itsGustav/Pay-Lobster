@@ -1,50 +1,58 @@
 {
-  "name": "lobster-pay",
+  "name": "pay-lobster",
   "version": "1.0.0",
-  "description": "Lobster Pay Skill for Clawdbot - Circle Programmable Wallets integration",
-  "main": "lib/circle-client.ts",
+  "description": "Payment infrastructure for AI agents - The Stripe for autonomous agents. Send, receive, and escrow USDC on Base.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
-    "lobster-pay": "./scripts/usdc-cli.ts"
+    "pay-lobster": "./dist/cli.js"
   },
   "scripts": {
-    "cli": "npx ts-node scripts/usdc-cli.ts",
-    "balance": "npx ts-node scripts/usdc-cli.ts balance",
-    "send": "npx ts-node scripts/usdc-cli.ts send",
-    "receive": "npx ts-node scripts/usdc-cli.ts receive",
-    "setup": "npx ts-node scripts/usdc-cli.ts setup",
-    "x402:pay": "npx ts-node scripts/usdc-cli.ts x402 pay",
-    "x402:receipts": "npx ts-node scripts/usdc-cli.ts x402 receipts",
-    "example:x402-client": "npx ts-node examples/x402-client-example.ts",
-    "example:x402-server": "npx ts-node examples/x402-server-example.ts"
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "cli": "npx tsx lib/index.ts",
+    "test": "echo \"Tests coming soon\" && exit 0"
   },
+  "files": [
+    "dist",
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^2.0.0",
-    "express": "^4.18.2",
     "ethers": "^6.9.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0",
-    "ts-node": "^10.9.0"
+    "tsx": "^4.0.0"
   },
   "keywords": [
     "usdc",
-    "circle",
+    "payments",
+    "ai-agents",
     "crypto",
-    "wallet",
-    "clawdbot",
-    "openclaw",
-    "skill",
+    "base",
+    "circle",
     "blockchain",
-    "testnet"
+    "escrow",
+    "stablecoin",
+    "web3",
+    "openclaw",
+    "agent-commerce"
   ],
-  "author": "OpenClaw Community",
+  "author": "Jakub Adamowicz <realtorjakub@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/openclaw/lobster-pay-skill"
+    "url": "git+https://github.com/itsGustav/Lobster-Pay.git"
   },
+  "bugs": {
+    "url": "https://github.com/itsGustav/Lobster-Pay/issues"
+  },
+  "homepage": "https://paylobster.com",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=18.0.0"
   }
 }

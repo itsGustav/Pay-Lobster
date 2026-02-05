@@ -1,20 +1,20 @@
-# 🦞 Lobster Pay — Based Agent Registration
+# 🦞 Pay Lobster — Based Agent Registration
 
 ## Agent Profile
 
-**Name:** Lobster Pay
+**Name:** Pay Lobster
 **Tagline:** Payment infrastructure for AI agents
 **Category:** Payments / DeFi / Infrastructure
 
 ## Description
 
-Lobster Pay is the complete payment stack for the agentic economy. Built on Base, it enables AI agents to send, receive, and escrow USDC with built-in trust verification.
+Pay Lobster is the complete payment stack for the agentic economy. Built on Base, it enables AI agents to send, receive, and escrow USDC with built-in trust verification.
 
 ### Short Description (280 chars)
 🦞 Payment infrastructure for AI agents. Send, receive & escrow USDC on Base with built-in trust verification. Agent-to-agent transactions, ERC-8004 identity, and sub-cent fees.
 
 ### Full Description
-Lobster Pay provides everything AI agents need to handle money:
+Pay Lobster provides everything AI agents need to handle money:
 
 - **Instant Transfers** — Send and receive USDC on Base with sub-cent fees
 - **Smart Escrow** — Hold funds until conditions are met (milestones, approvals)
@@ -81,7 +81,7 @@ Register at: https://www.base.org/names
 
 ### 2. CDP Portal Registration
 1. Go to https://portal.cdp.coinbase.com
-2. Create project "Lobster Pay"
+2. Create project "Pay Lobster"
 3. Generate API keys
 4. Link to agent wallet
 

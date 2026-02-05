@@ -126,7 +126,7 @@ export interface AgentRegistration {
   }[];
   supportedTrust: ('reputation' | 'crypto-economic' | 'tee-attestation' | 'zkml')[];
   
-  // Lobster Pay specific extensions
+  // Pay Lobster specific extensions
   usdcAgent?: {
     version: string;
     capabilities: string[];

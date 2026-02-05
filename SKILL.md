@@ -1,4 +1,4 @@
-# Lobster Pay Skill
+# Pay Lobster Skill
 
 Enable Clawdbot to interact with USDC on blockchain networks via Circle's Programmable Wallets API.
 
@@ -140,7 +140,7 @@ The skill activates on phrases like:
                     │
                     ▼
 ┌─────────────────────────────────────────┐
-│          Lobster Pay Skill               │
+│          Pay Lobster Skill               │
 │   - Balance queries                     │
 │   - Transaction creation                │
 │   - Wallet management                   │

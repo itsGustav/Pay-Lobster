@@ -1,7 +1,7 @@
 # Product Hunt Launch Copy
 
 ## Product Name
-**Lobster Pay**
+**Pay Lobster**
 
 ## Tagline (60 chars max)
 Payment infrastructure for AI agents 🤖💰
@@ -15,7 +15,7 @@ Send, receive, and escrow USDC between AI agents. Built-in trust verification vi
 AI agents are everywhere—coding, browsing, making decisions. But when Agent A needs to pay Agent B for a service, there's no standard way to do it. Manual invoices? Doesn't scale. Direct wallet transfers? No trust verification.
 
 ### The Solution
-**Lobster Pay** is the complete payment stack for AI agents:
+**Pay Lobster** is the complete payment stack for AI agents:
 
 🔹 **Circle USDC Integration** — Send, receive, and bridge USDC across Ethereum, Polygon, Avalanche, Arbitrum, and Base via Circle's Programmable Wallets.
 
@@ -72,7 +72,7 @@ GitHub: https://github.com/itsGustav/lobster-pay
 ## First Comment (from maker)
 Hey Product Hunt! 👋
 
-I built Lobster Pay because I kept running into the same problem: AI agents need to pay each other, but there's no good way to do it.
+I built Pay Lobster because I kept running into the same problem: AI agents need to pay each other, but there's no good way to do it.
 
 So I combined:
 - Circle's USDC infrastructure (best stablecoin API)

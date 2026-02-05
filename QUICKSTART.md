@@ -1,6 +1,6 @@
 # 🚀 Quick Start
 
-Get running with Lobster Pay in under 5 minutes.
+Get running with Pay Lobster in under 5 minutes.
 
 ## Option 1: Environment Variables (Simplest)
 

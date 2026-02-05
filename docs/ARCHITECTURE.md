@@ -1,4 +1,4 @@
-# Lobster Pay Architecture
+# Pay Lobster Architecture
 
 ## System Overview
 

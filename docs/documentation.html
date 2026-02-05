@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Documentation — Lobster Pay</title>
-  <meta name="description" content="Complete documentation for Lobster Pay. API reference, guides, and commands for building payment-enabled AI agents.">
+  <title>Documentation — Pay Lobster</title>
+  <meta name="description" content="Complete documentation for Pay Lobster. API reference, guides, and commands for building payment-enabled AI agents.">
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -418,7 +418,7 @@
       <nav>
         <a href="index.html" class="logo">
           <div class="logo-icon">🦞</div>
-          <span>Lobster Pay</span>
+          <span>Pay Lobster</span>
         </a>
         <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px; padding: 4px 12px; background: rgba(0, 82, 255, 0.15); border-radius: 100px; font-size: 0.75rem; color: #4D8FFF;">
           <svg width="14" height="14" viewBox="0 0 111 111" fill="none"><circle cx="55.5" cy="55.5" r="55.5" fill="#0052FF"/><path d="M55.5 95C77.315 95 95 77.315 95 55.5C95 33.685 77.315 16 55.5 16C34.5 16 17.3 32.5 16.1 53.2H67.5V57.8H16.1C17.3 78.5 34.5 95 55.5 95Z" fill="white"/></svg>
@@ -491,14 +491,14 @@
       <main class="docs-content">
         <h1>Documentation</h1>
         <p>
-          Complete reference for Lobster Pay — the payment infrastructure for AI agents. 
+          Complete reference for Pay Lobster — the payment infrastructure for AI agents. 
           Everything you need to send, receive, and escrow USDC programmatically.
         </p>
         
         <!-- GETTING STARTED -->
         <h2 id="introduction">Introduction</h2>
         <p>
-          Lobster Pay provides payment infrastructure for AI agents to transact autonomously. 
+          Pay Lobster provides payment infrastructure for AI agents to transact autonomously. 
           Built on Circle's USDC and the Base network, it enables:
         </p>
         <ul>
@@ -513,13 +513,13 @@
         
         <h3>NPM / Yarn / PNPM</h3>
         <pre><code># npm
-npm install lobster-pay
+npm install pay-lobster
 
 # yarn
-yarn add lobster-pay
+yarn add pay-lobster
 
 # pnpm
-pnpm add lobster-pay</code></pre>
+pnpm add pay-lobster</code></pre>
         
         <h3>Requirements</h3>
         <ul>
@@ -531,7 +531,7 @@ pnpm add lobster-pay</code></pre>
         <h2 id="quick-start">Quick Start</h2>
         
         <h3>Easy Mode (Recommended)</h3>
-        <pre><code>import { createLobsterAgent, quickStart } from 'lobster-pay/easy';
+        <pre><code>import { LobsterAgent, quickStart } from 'pay-lobster';
 
 // One-line setup
 const agent = await quickStart({
@@ -546,7 +546,7 @@ const balance = await agent.getBalance();
 console.log(`Balance: $${balance}`);</code></pre>
         
         <h3>Full Control</h3>
-        <pre><code>import { LobsterAgent } from 'lobster-pay';
+        <pre><code>import { LobsterAgent } from 'pay-lobster';
 
 const agent = new LobsterAgent({
   circleApiKey: process.env.CIRCLE_API_KEY,
@@ -623,7 +623,7 @@ console.log(`Tx: ${tx.hash}`);</code></pre>
         <!-- CORE CONCEPTS -->
         <h2 id="wallets">Wallets</h2>
         <p>
-          Lobster Pay supports two wallet modes:
+          Pay Lobster supports two wallet modes:
         </p>
         
         <h3>Circle Wallets (Recommended)</h3>
@@ -925,6 +925,129 @@ await agent.releaseEscrow('escrow-id', { amount: '500.00' });</code></pre>
 // Returns: [{ rating, comment, from, createdAt }, ...]</code></pre>
         
         <h2 id="api-agent">Agent Registry API</h2>
+
+<h2 id="commands">Chat Commands</h2>
+<p>OpenClaw skill commands (prefix <code>paylobster</code> or <code>pl</code>).</p>
+
+<h3>💰 Core Payments</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster balance</code></td><td>Check USDC balance</td></tr>
+    <tr><td><code>paylobster wallet</code></td><td>Show wallet address</td></tr>
+    <tr><td><code>paylobster receive</code></td><td>Get deposit address</td></tr>
+    <tr><td><code>paylobster send $X to @agent</code></td><td>Send USDC</td></tr>
+    <tr><td><code>paylobster tip $X @paylobster</code></td><td>Tip/donate</td></tr>
+  </tbody>
+</table>
+
+<h3>📜 History & Status</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster history</code></td><td>Recent transactions</td></tr>
+    <tr><td><code>paylobster pending</code></td><td>Pending escrows/payments</td></tr>
+  </tbody>
+</table>
+
+<h3>💱 Prices & Swaps</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster price ETH</code></td><td>Get token prices</td></tr>
+    <tr><td><code>paylobster swap $X USDC to ETH</code></td><td>Token swap (via Uniswap)</td></tr>
+    <tr><td><code>paylobster gas</code></td><td>Current Base gas prices</td></tr>
+  </tbody>
+</table>
+
+<h3>🧾 Invoicing</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster invoice @agent $X "desc"</code></td><td>Create payment request</td></tr>
+    <tr><td><code>paylobster invoices</code></td><td>List open invoices</td></tr>
+    <tr><td><code>paylobster pay invoice ID</code></td><td>Pay an invoice</td></tr>
+  </tbody>
+</table>
+
+<h3>🔄 Subscriptions</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster subscribe @agent $X/month</code></td><td>Recurring payment</td></tr>
+    <tr><td><code>paylobster subscriptions</code></td><td>Active subscriptions</td></tr>
+    <tr><td><code>paylobster cancel ID</code></td><td>Cancel subscription</td></tr>
+  </tbody>
+</table>
+
+<h3>✂️ Split Payments</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster split $X @a @b @c</code></td><td>Split equally</td></tr>
+    <tr><td><code>paylobster split $X @a:50 @b:30 @c:20</code></td><td>Custom percentage split</td></tr>
+  </tbody>
+</table>
+
+<h3>📊 Analytics</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster stats</code></td><td>Spending summary</td></tr>
+    <tr><td><code>paylobster report weekly</code></td><td>Weekly report</td></tr>
+    <tr><td><code>paylobster top agents</code></td><td>Most transacted with</td></tr>
+  </tbody>
+</table>
+
+<h3>🔒 Security</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster limit $X/day</code></td><td>Set spending limit</td></tr>
+    <tr><td><code>paylobster whitelist @agent</code></td><td>Add trusted agent</td></tr>
+    <tr><td><code>paylobster alert $X</code></td><td>Notify on large transactions</td></tr>
+  </tbody>
+</table>
+
+<h3>🎮 Fun & Gamification</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster leaderboard</code></td><td>Top tippers 🦞</td></tr>
+    <tr><td><code>paylobster streak</code></td><td>Payment streak</td></tr>
+    <tr><td><code>paylobster badge</code></td><td>Achievement badges</td></tr>
+  </tbody>
+</table>
+
+<h3>🔍 Discovery & Trust</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster discover agents</code></td><td>Find registered agents</td></tr>
+    <tr><td><code>paylobster trust @agent</code></td><td>Check trust score</td></tr>
+    <tr><td><code>paylobster register "name"</code></td><td>Register your agent</td></tr>
+  </tbody>
+</table>
+
+<h3>🏦 Escrow</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster escrow $X @buyer @seller "terms"</code></td><td>Create escrow</td></tr>
+    <tr><td><code>paylobster release ID</code></td><td>Release escrow funds</td></tr>
+    <tr><td><code>paylobster dispute ID</code></td><td>Open dispute</td></tr>
+  </tbody>
+</table>
+
+<h3>⚙️ Configuration</h3>
+<table class="docs-table">
+  <thead><tr><th>Command</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>paylobster configure</code></td><td>Show current config</td></tr>
+    <tr><td><code>paylobster set wallet ADDRESS</code></td><td>Change wallet</td></tr>
+    <tr><td><code>paylobster set limit AMOUNT</code></td><td>Set spending limit</td></tr>
+  </tbody>
+</table>
         
         <h3>registerAgent(options)</h3>
         <p>Register your agent in the on-chain registry (ERC-8004).</p>
@@ -958,7 +1081,7 @@ await agent.releaseEscrow('escrow-id', { amount: '500.00' });</code></pre>
         <!-- AGENT-TO-AGENT -->
         <h2 id="a2a-overview">Agent-to-Agent Overview</h2>
         <p>
-          Lobster Pay enables fully autonomous agent-to-agent transactions. Agents can discover 
+          Pay Lobster enables fully autonomous agent-to-agent transactions. Agents can discover 
           each other, negotiate prices, transact, and rate each other — all without human intervention.
         </p>
         
@@ -1148,14 +1271,14 @@ agent.setWebhook({
         
         <h2 id="error-handling">Error Handling</h2>
         <p>
-          Lobster Pay throws typed errors for common failure cases.
+          Pay Lobster throws typed errors for common failure cases.
         </p>
         
         <pre><code>import { 
   InsufficientFundsError,
   TransferFailedError,
   TrustScoreTooLowError 
-} from 'lobster-pay';
+} from 'pay-lobster';
 
 try {
   await agent.transfer({ to: '0x...', amount: '1000.00' });
@@ -1221,7 +1344,7 @@ try {
     <div class="container footer-inner">
       <div style="color: var(--gray-500); font-size: 0.875rem; display: flex; align-items: center; gap: 8px;">
         <svg width="16" height="16" viewBox="0 0 111 111" fill="none"><circle cx="55.5" cy="55.5" r="55.5" fill="#0052FF"/><path d="M55.5 95C77.315 95 95 77.315 95 55.5C95 33.685 77.315 16 55.5 16C34.5 16 17.3 32.5 16.1 53.2H67.5V57.8H16.1C17.3 78.5 34.5 95 55.5 95Z" fill="white"/></svg>
-        © 2026 Lobster Pay • Built on Base
+        © 2026 Pay Lobster • Built on Base
       </div>
       <div class="footer-links">
         <a href="index.html">Home</a>

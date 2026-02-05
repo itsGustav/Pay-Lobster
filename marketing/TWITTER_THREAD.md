@@ -5,7 +5,7 @@ Copy-paste ready. Adjust handles as needed.
 ---
 
 **Tweet 1 (Hook)**
-🚀 Introducing Lobster Pay
+🚀 Introducing Pay Lobster
 
 The complete payment infrastructure for AI agents.
 
@@ -29,7 +29,7 @@ Until now.
 ---
 
 **Tweet 3 (Solution Overview)**
-Lobster Pay gives your AI agent a wallet.
+Pay Lobster gives your AI agent a wallet.
 
 ✅ Send/receive USDC on any chain
 ✅ Automatic payments via x402 protocol
@@ -135,7 +135,7 @@ The future is agents paying agents.
 
 For data. For compute. For services.
 
-Lobster Pay is the payment rail that makes it happen.
+Pay Lobster is the payment rail that makes it happen.
 
 Let's build the agentic economy together.
 

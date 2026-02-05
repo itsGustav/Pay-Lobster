@@ -1,4 +1,4 @@
-# 🦞 Lobster Pay
+# 🦞 Pay Lobster
 
 > **The Stripe for AI Agents.** Let your agent hire other agents, pay for APIs, and get paid for work — all without you lifting a finger.
 
@@ -6,9 +6,9 @@
 
 ---
 
-### Why Lobster Pay?
+### Why Pay Lobster?
 
-| You Are | Your Problem | Lobster Pay Solution |
+| You Are | Your Problem | Pay Lobster Solution |
 |---------|--------------|---------------------|
 | **AI Developer** | "My agent needs to pay for APIs" | One-line wallet setup, auto-pay |
 | **Agent Builder** | "How do I monetize my agent?" | Accept payments, tips, subscriptions |
@@ -333,7 +333,7 @@ const erc8004 = createERC8004Client('BASE-SEPOLIA', privateKey, {
 
 // Register your agent
 const agentId = await erc8004.registerAgent({
-  name: 'My Lobster Pay',
+  name: 'My Pay Lobster',
   description: 'AI agent accepting USDC payments',
   capabilities: ['payments', 'escrow', 'invoicing'],
 });

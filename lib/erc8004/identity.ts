@@ -258,7 +258,7 @@ export class IdentityClient {
 }
 
 /**
- * Create a standard Lobster Pay registration file
+ * Create a standard Pay Lobster registration file
  */
 export function createLobsterAgentRegistration(options: {
   name: string;

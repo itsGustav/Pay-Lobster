@@ -1,13 +1,13 @@
-# Lobster Pay Press Kit
+# Pay Lobster Press Kit
 
 ## One-Liner
 Payment infrastructure for AI agents.
 
 ## Boilerplate (Short)
-Lobster Pay is an open-source SDK that enables AI agents to send, receive, and escrow USDC with built-in trust verification. Built on Circle's Programmable Wallets, x402 protocol, and ERC-8004 standard.
+Pay Lobster is an open-source SDK that enables AI agents to send, receive, and escrow USDC with built-in trust verification. Built on Circle's Programmable Wallets, x402 protocol, and ERC-8004 standard.
 
 ## Boilerplate (Long)
-Lobster Pay provides complete payment infrastructure for the emerging agentic economy. The open-source SDK enables AI agents to transact autonomously using USDC stablecoins, with built-in trust verification through the ERC-8004 standard. Key features include HTTP-native micropayments via the x402 protocol, pre-built escrow templates for common use cases, and a reputation system that ties payment limits to on-chain trust scores. Built on Circle's Programmable Wallets API, Lobster Pay supports Ethereum, Base, Polygon, Avalanche, and Arbitrum networks.
+Pay Lobster provides complete payment infrastructure for the emerging agentic economy. The open-source SDK enables AI agents to transact autonomously using USDC stablecoins, with built-in trust verification through the ERC-8004 standard. Key features include HTTP-native micropayments via the x402 protocol, pre-built escrow templates for common use cases, and a reputation system that ties payment limits to on-chain trust scores. Built on Circle's Programmable Wallets API, Pay Lobster supports Ethereum, Base, Polygon, Avalanche, and Arbitrum networks.
 
 ## Key Facts
 - **Launch Date:** February 2026
@@ -29,7 +29,7 @@ Lobster Pay provides complete payment infrastructure for the emerging agentic ec
 - **Documentation:** https://github.com/itsGustav/lobster-pay/tree/main/docs
 
 ## Founder Quote
-> "AI agents are becoming autonomous economic actors. They need payment rails that are as smart as they are—with built-in trust, automatic transactions, and protection mechanisms. That's what Lobster Pay provides."
+> "AI agents are becoming autonomous economic actors. They need payment rails that are as smart as they are—with built-in trust, automatic transactions, and protection mechanisms. That's what Pay Lobster provides."
 
 ## Technical Quote
 > "We combined the best of both worlds: Circle's enterprise-grade stablecoin infrastructure with Ethereum's emerging standards for agent identity. The result is a payment stack that just works."
@@ -55,7 +55,7 @@ Tip jars and payment collection for AI-powered services.
 4. Enterprise AI Teams
 
 ## Competitive Landscape
-Lobster Pay is the first to combine:
+Pay Lobster is the first to combine:
 - Circle's USDC infrastructure
 - x402 HTTP payment protocol
 - ERC-8004 Trustless Agents standard
@@ -65,7 +65,7 @@ No existing solution provides this integration.
 ## Media Assets
 
 ### Logo
-[To be created - blue/green gradient, "Lobster Pay" wordmark]
+[To be created - blue/green gradient, "Pay Lobster" wordmark]
 
 ### Screenshots
 1. Landing page hero
@@ -88,7 +88,7 @@ No existing solution provides this integration.
 ## FAQ
 
 **Q: Is this affiliated with Circle?**
-A: No, Lobster Pay is an independent open-source project built on Circle's public APIs.
+A: No, Pay Lobster is an independent open-source project built on Circle's public APIs.
 
 **Q: Is it production ready?**
 A: Currently optimized for testnet. Mainnet support is available but recommended for small amounts initially.

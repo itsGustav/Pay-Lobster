@@ -1,4 +1,4 @@
-# Lobster Pay Demo Script
+# Pay Lobster Demo Script
 
 **Duration:** 3-5 minutes  
 **Format:** Screen recording with voiceover
@@ -7,9 +7,9 @@
 
 ## Opening (15 sec)
 
-**[Screen: Clawdbot logo + Lobster Pay title card]**
+**[Screen: Clawdbot logo + Pay Lobster title card]**
 
-> "Lobster Pay is a Clawdbot skill that brings full USDC payment infrastructure to AI agents. Send, receive, invoice, escrow — all through natural language."
+> "Pay Lobster is a Clawdbot skill that brings full USDC payment infrastructure to AI agents. Send, receive, invoice, escrow — all through natural language."
 
 ---
 
@@ -220,7 +220,7 @@ Bot: "📊 USDC Activity Report - January 2026
 
 **[Screen: Feature summary + links]**
 
-> "Lobster Pay: Complete payment infrastructure for AI agents.
+> "Pay Lobster: Complete payment infrastructure for AI agents.
 > 
 > Built with Circle Programmable Wallets, CCTP, and ❤️.
 > 
@@ -240,7 +240,7 @@ Bot: "📊 USDC Activity Report - January 2026
 ## Required Assets
 
 - [ ] Clawdbot logo
-- [ ] Lobster Pay title card
+- [ ] Pay Lobster title card
 - [ ] Circle logo (attribution)
 - [ ] Screen recording software (OBS/Loom)
 - [ ] Test wallet with testnet USDC
