@@ -1,7 +1,7 @@
 {
   "name": "pay-lobster",
-  "version": "2.1.0",
-  "description": "Payment infrastructure for AI agents - The Stripe for autonomous agents. Send, receive, and escrow USDC on Base.",
+  "version": "3.1.0",
+  "description": "Payment infrastructure for AI agents - The Stripe for autonomous agents. Send, receive, and escrow USDC on Base with trust-gating and spending limits.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {

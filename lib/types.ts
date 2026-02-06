@@ -107,3 +107,38 @@ export interface AutonomousConfig {
   autoApproveBelow: string;
   allowedCapabilities: string[];
 }
+
+// V3.1.0 Autonomous Agent Features
+export interface TrustGateConfig {
+  enabled: boolean;
+  minScore: number;
+  minTier: 'STANDARD' | 'BUILDING' | 'GOOD' | 'EXCELLENT' | 'ELITE';
+  allowUnscored: boolean;
+  exceptions: string[];
+}
+
+export interface SpendingLimit {
+  address: string;
+  maxAmount: bigint;
+  dailyLimit?: bigint;
+  weeklyLimit?: bigint;
+  monthlyLimit?: bigint;
+  totalLimit?: bigint;
+}
+
+export interface SpendingConfig {
+  enabled: boolean;
+  globalLimits?: {
+    maxTransaction: bigint;
+    dailyLimit: bigint;
+    weeklyLimit: bigint;
+    monthlyLimit: bigint;
+  };
+  perAgent: Record<string, SpendingLimit>;
+}
+
+export interface FullAutonomousConfig {
+  trustGate: TrustGateConfig;
+  spending: SpendingConfig;
+  version: string;
+}

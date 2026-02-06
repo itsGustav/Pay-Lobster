@@ -10,8 +10,11 @@ This skill allows your Clawdbot to:
 - 📥 **Receive USDC** with generated addresses
 - 🌉 **Cross-chain transfers** via Circle's CCTP
 - 🤖 **Agent-to-agent payments** for autonomous commerce
+- 🛡️ **Trust-gated transactions** with reputation checks (v3.1.0)
+- 💸 **Spending limits** for safe autonomous operation (v3.1.0)
 
 **Built for the Circle USDC Hackathon 2026** 🏆
+**Version 3.1.0** — Now with autonomous agent safeguards!
 
 ## Requirements
 
@@ -120,6 +123,190 @@ The skill activates on phrases like:
 - "Bridge USDC..."
 - "What's my wallet address?"
 - "USDC balance"
+
+## Autonomous Agent Features (v3.1.0)
+
+### Trust-Gated Payments
+
+Automatically reject transactions to low-reputation agents. Configure minimum trust scores and tiers to ensure safe autonomous operation.
+
+**Configuration:**
+```bash
+# Check current trust-gate config
+paylobster trust-gate status
+
+# Enable trust-gating with minimum score
+paylobster trust-gate set --enable --min-score 650
+
+# Set minimum tier requirement
+paylobster trust-gate set --min-tier GOOD
+
+# Allow unscored agents (new agents with no history)
+paylobster trust-gate set --allow-unscored
+
+# Add exception (whitelist trusted address)
+paylobster trust-gate add-exception 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb
+
+# Remove exception
+paylobster trust-gate remove-exception 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb
+```
+
+**Trust Tiers:**
+- **STANDARD** (0-399) - New agents, limited history
+- **BUILDING** (400-599) - Establishing reputation
+- **GOOD** (600-749) - Reliable, eligible for credit
+- **EXCELLENT** (750-899) - Highly trusted
+- **ELITE** (900-1000) - Top-tier reputation
+
+**Library Usage:**
+```typescript
+import { checkTrustGate, sendWithTrustGate } from 'pay-lobster';
+
+// Check if recipient passes trust gate
+const result = await checkTrustGate(
+  recipientAddress,
+  provider,
+  config.trustGate
+);
+
+if (!result.allowed) {
+  console.log(`Blocked: ${result.reason}`);
+  console.log(`Score: ${result.score}`);
+}
+
+// Wrapper that checks both trust-gate and spending limits
+const check = await sendWithTrustGate(
+  recipientAddress,
+  amount,
+  provider,
+  autonomousConfig
+);
+
+if (check.allowed) {
+  // Proceed with payment
+  await agent.transfer(recipientAddress, amount);
+  recordSpending(recipientAddress, amount, txHash);
+}
+```
+
+### Spending Limits
+
+Set global and per-agent spending limits to control autonomous agent expenditure. Supports transaction, daily, weekly, and monthly caps.
+
+**Configuration:**
+```bash
+# Check current limits and usage
+paylobster limits status
+
+# Set global limits
+paylobster limits set-global --enable
+paylobster limits set-global --max-tx 1000 --daily 5000 --weekly 20000
+
+# Set per-agent limits
+paylobster limits set 0xABC... --max-tx 500 --daily 2000 --monthly 10000
+
+# Set lifetime limit to specific agent
+paylobster limits set 0xABC... --total 50000
+
+# Remove per-agent limits
+paylobster limits remove 0xABC...
+
+# View spending history
+paylobster limits history 50
+```
+
+**Library Usage:**
+```typescript
+import { 
+  checkSpendingLimit, 
+  recordSpending,
+  getSpendingSummary 
+} from 'pay-lobster';
+
+// Check if payment would exceed limits
+const result = await checkSpendingLimit(
+  recipientAddress,
+  amount,
+  config.spending
+);
+
+if (!result.allowed) {
+  console.log(`Blocked: ${result.reason}`);
+  if (result.remaining) {
+    console.log('Remaining limits:', result.remaining);
+  }
+}
+
+// After successful payment, record it
+recordSpending(recipientAddress, amount, txHash);
+
+// Get spending summary
+const summary = getSpendingSummary(recipientAddress);
+console.log(`Daily: ${summary.daily}`);
+console.log(`Weekly: ${summary.weekly}`);
+console.log(`Monthly: ${summary.monthly}`);
+console.log(`Total: ${summary.total} (${summary.count} transactions)`);
+```
+
+### Audit Logging
+
+All trust-gate and spending limit decisions are automatically logged to `~/.paylobster/audit.log` for compliance and debugging.
+
+**View audit log:**
+```typescript
+import { getAuditLog } from 'pay-lobster';
+
+const recentEntries = getAuditLog(100); // Last 100 entries
+recentEntries.forEach(entry => console.log(entry));
+```
+
+### Configuration Files
+
+Autonomous agent configuration is stored in `~/.paylobster/`:
+
+- **`autonomous.json`** - Trust-gate and spending limit config
+- **`spending-history.json`** - Transaction history for limit tracking
+- **`audit.log`** - Decision log (allowed/blocked with reasons)
+
+**Example autonomous.json:**
+```json
+{
+  "trustGate": {
+    "enabled": true,
+    "minScore": 600,
+    "minTier": "GOOD",
+    "allowUnscored": false,
+    "exceptions": ["0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"]
+  },
+  "spending": {
+    "enabled": true,
+    "globalLimits": {
+      "maxTransaction": "1000000000",
+      "dailyLimit": "5000000000",
+      "weeklyLimit": "20000000000",
+      "monthlyLimit": "50000000000"
+    },
+    "perAgent": {
+      "0xabc...": {
+        "address": "0xabc...",
+        "maxAmount": "500000000",
+        "dailyLimit": "2000000000",
+        "totalLimit": "50000000000"
+      }
+    }
+  },
+  "version": "3.1.0"
+}
+```
+
+### Safety Best Practices
+
+1. **Start conservative** - Begin with low limits and gradually increase
+2. **Monitor audit logs** - Review blocked transactions regularly
+3. **Use exceptions wisely** - Only whitelist thoroughly vetted addresses
+4. **Test with dry-run** - Always test payment logic before deploying
+5. **Combine safeguards** - Use both trust-gating AND spending limits
+6. **Regular reviews** - Check spending history weekly
 
 ## Security
 

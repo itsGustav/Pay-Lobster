@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate OG Images</title>
+    <style>
+        .frame {
+            width: 1200px;
+            height: 630px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+            font-family: Arial, sans-serif;
+        }
+        .initial {
+            background: linear-gradient(to bottom right, #1e3a8a, #3b82f6);
+            color: white;
+        }
+        .no-wallet, .error {
+            background: linear-gradient(to bottom right, #7f1d1d, #dc2626);
+            color: white;
+        }
+        .not-registered {
+            background: linear-gradient(to bottom right, #1e293b, #334155);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>OG Image Generator</h1>
+    <p>Use screenshot tools to capture these frames at 1200x630</p>
+    
+    <h2>Initial Frame</h2>
+    <div class="frame initial">
+        <div style="font-size: 80px; margin-bottom: 20px;">🦞</div>
+        <div style="font-size: 60px; margin-bottom: 10px;">Check Your</div>
+        <div style="font-size: 80px; color: #fbbf24; margin-bottom: 20px;">LOBSTER Score</div>
+        <div style="font-size: 36px; color: #e5e7eb;">Your credit score on Base</div>
+    </div>
+
+    <h2>No Wallet Frame</h2>
+    <div class="frame no-wallet">
+        <div style="font-size: 80px; margin-bottom: 40px;">⚠️</div>
+        <div style="font-size: 60px; font-weight: bold; margin-bottom: 20px;">No Wallet Connected</div>
+        <div style="font-size: 36px; color: #fca5a5;">Please connect a wallet</div>
+    </div>
+
+    <h2>Not Registered Frame</h2>
+    <div class="frame not-registered">
+        <div style="font-size: 80px; margin-bottom: 40px;">🦞</div>
+        <div style="font-size: 60px; font-weight: bold; margin-bottom: 20px;">Not Registered Yet</div>
+        <div style="font-size: 32px; color: #cbd5e1;">Register at paylobster.com to start building your score!</div>
+    </div>
+
+    <h2>Error Frame</h2>
+    <div class="frame error">
+        <div style="font-size: 80px; margin-bottom: 40px;">❌</div>
+        <div style="font-size: 60px; font-weight: bold; margin-bottom: 20px;">Error</div>
+        <div style="font-size: 36px; color: #fca5a5;">Unable to fetch score. Please try again.</div>
+    </div>
+
+    <p><strong>Instructions:</strong></p>
+    <ol>
+        <li>Open this file in a browser</li>
+        <li>Use browser devtools or a screenshot tool to capture each frame at exactly 1200x630</li>
+        <li>Save as: og-initial.png, og-no-wallet.png, og-not-registered.png, og-error.png</li>
+        <li>Place in /public directory</li>
+    </ol>
+</body>
+</html>

@@ -26,5 +26,9 @@ export type { OnrampResult, OnrampConfig, OnrampSession, OnrampUrlParams, Onramp
 export * from './chains';
 export { X402Client, createX402Fetch } from './x402';
 export type { X402PaymentChallenge, X402PaymentProof } from './x402';
+export { PayLobsterIdentity, PayLobsterReputation, PayLobsterCredit, PayLobsterEscrow, createV3Contracts, V3_ADDRESSES, } from './contracts-v3';
+export type { AgentMetadata, AgentInfo, TrustVector, FeedbackEntry, CreditProfile, LoanInfo, EscrowInfo, } from './contracts-v3';
+export { loadConfig as loadAutonomousConfig, saveConfig as saveAutonomousConfig, checkTrustGate, checkSpendingLimit, recordSpending, sendWithTrustGate, getSpendingSummary, getSpendingHistory, clearSpendingHistory, getAuditLog, resetConfig as resetAutonomousConfig, SCORE_FOR_CREDIT, TIER_SCORES, } from './autonomous';
+export type { TrustGateConfig, SpendingLimit, SpendingConfig, AutonomousConfig as FullAutonomousConfig, TrustGateResult, SpendingLimitResult, SpendingRecord, SpendingHistory, } from './autonomous';
 export { LobsterAgent as default } from './agent';
 //# sourceMappingURL=index.d.ts.map

@@ -12,6 +12,47 @@ import { ethers } from 'ethers';
 import { getSwapQuote, executeSwap } from './swap';
 import { stats } from './stats';
 import { onramp } from './onramp';
+import {
+  loadConfig as loadAutonomousConfig,
+  saveConfig as saveAutonomousConfig,
+  checkTrustGate,
+  checkSpendingLimit,
+  getSpendingSummary,
+  getSpendingHistory,
+  getAuditLog,
+  TIER_SCORES,
+} from './autonomous';
+
+// V3 Contract Addresses (Base Mainnet)
+const V3_CONTRACTS = {
+  identity: '0xA174ee274F870631B3c330a85EBCad74120BE662',
+  reputation: '0x02bb4132a86134684976E2a52E43D59D89E64b29',
+  credit: '0xD9241Ce8a721Ef5fcCAc5A11983addC526eC80E1',
+  escrow: '0x49EdEe04c78B7FeD5248A20706c7a6c540748806',
+};
+
+// V3 Contract ABIs (minimal for CLI)
+const V3_ABIS = {
+  credit: [
+    'function getCreditScore(address agent) view returns (uint256 score, string memory tier)',
+    'function getCreditStatus(address agent) view returns (uint256 limit, uint256 available, uint256 inUse)',
+    'function getCreditHistory(address agent) view returns (tuple(uint256 borrowed, uint256 repaid, uint256 active, uint256 repaymentRate))',
+    'function getTier(address agent) view returns (string memory tier, uint256 score)',
+  ],
+  reputation: [
+    'function getReputation(address agent) view returns (tuple(uint256 overall, uint256 delivery, uint256 communication, uint256 quality, uint256 reliability, uint256 totalRatings))',
+    'function getTrustHistory(address agent, uint256 days) view returns (tuple(uint256 timestamp, uint256 score, string memory event)[])',
+  ],
+  identity: [
+    'function getIdentity(address agent) view returns (tuple(uint256 tokenId, string memory name, address owner, uint256 registered, string[] memory capabilities))',
+    'function getAllAgents(uint256 offset, uint256 limit) view returns (tuple(address agent, string memory name, uint256 score)[])',
+  ],
+  escrow: [
+    'function getActiveLoans(address agent) view returns (tuple(uint256 id, uint256 amount, uint256 remaining, uint256 dueDate)[])',
+    'function getLoanDetails(uint256 loanId) view returns (tuple(uint256 id, uint256 original, uint256 remaining, uint256 paid, uint256 dueDate, address seller))',
+    'function repayLoan(uint256 loanId) payable',
+  ],
+};
 
 // Colors for terminal output
 const colors = {
@@ -46,7 +87,7 @@ const DEFAULT_CONFIG: PayLobsterConfig = {
   network: 'base',
   rpcUrl: 'https://mainnet.base.org',
   setupComplete: false,
-  version: '1.1.2',
+  version: '3.0.0',
 };
 
 // ASCII Art Banner
@@ -332,6 +373,26 @@ ${c.bright}COMMANDS${c.reset}
   ${c.cyan}stats${c.reset}                 Show global volume stats
   ${c.cyan}volume${c.reset}                Alias for stats
   ${c.cyan}leaderboard${c.reset}           Top wallets by volume
+  
+  ${c.bright}V3 CREDIT SCORE${c.reset}
+  ${c.cyan}score [address]${c.reset}       Check LOBSTER credit score (300-850)
+  ${c.cyan}credit${c.reset}                Your credit limit & available
+  ${c.cyan}tier${c.reset}                  Your tier (Standard/Bronze/Silver/Gold/Elite)
+  ${c.cyan}credit-history${c.reset}        Credit usage history
+  
+  ${c.bright}V3 CREDIT ESCROW${c.reset}
+  ${c.cyan}repay <loanId>${c.reset}        Repay credit portion of escrow
+  ${c.cyan}loans${c.reset}                 List active credit loans
+  ${c.cyan}loan <loanId>${c.reset}         Loan details
+  
+  ${c.bright}V3 REPUTATION${c.reset}
+  ${c.cyan}reputation [addr]${c.reset}     Full trust vector breakdown
+  ${c.cyan}trust-history${c.reset}         How trust changed over time
+  
+  ${c.bright}V3 IDENTITY${c.reset}
+  ${c.cyan}identity [address]${c.reset}    Agent NFT details
+  ${c.cyan}agents${c.reset}                List all registered agents
+  
   ${c.cyan}config${c.reset}                Show current configuration
   ${c.cyan}help${c.reset}                  Show this help message
 
@@ -345,9 +406,11 @@ ${c.bright}EXAMPLES${c.reset}
   ${c.dim}# Check an agent's reputation${c.reset}
   paylobster trust agent:WebDevBot
 
-${c.bright}CONTRACTS (Base Mainnet)${c.reset}
-  Escrow:   ${c.dim}0xa091fC821c85Dfd2b2B3EF9e22c5f4c8B8A24525${c.reset}
-  Registry: ${c.dim}0x10BCa62Ce136A70F914c56D97e491a85d1e050E7${c.reset}
+${c.bright}V3 CONTRACTS (Base Mainnet)${c.reset}
+  Identity:   ${c.dim}${V3_CONTRACTS.identity}${c.reset}
+  Reputation: ${c.dim}${V3_CONTRACTS.reputation}${c.reset}
+  Credit:     ${c.dim}${V3_CONTRACTS.credit}${c.reset}
+  Escrow V3:  ${c.dim}${V3_CONTRACTS.escrow}${c.reset}
 
 ${c.dim}Documentation: https://paylobster.com/docs${c.reset}
 `);
@@ -682,6 +745,1003 @@ ${c.bright}NOTE${c.reset}
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// V3 COMMAND HANDLERS
+// ═══════════════════════════════════════════════════════════
+
+// Handle score command: paylobster score [address]
+async function handleScore(args: string[]): Promise<void> {
+  const config = loadConfig();
+  
+  try {
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const creditContract = new ethers.Contract(V3_CONTRACTS.credit, V3_ABIS.credit, provider);
+    
+    let address: string;
+    if (args.length > 0) {
+      address = args[0];
+      console.log(`\n${c.dim}Checking credit score for ${address}...${c.reset}\n`);
+    } else {
+      if (!config.privateKey) {
+        console.log(`${c.red}✗${c.reset} No wallet configured. Run ${c.cyan}paylobster setup${c.reset} first.`);
+        return;
+      }
+      address = getAddress(config.privateKey);
+      console.log(`\n${c.dim}Checking your credit score...${c.reset}\n`);
+    }
+    
+    const [score, tier] = await creditContract.getCreditScore(address);
+    const scoreNum = Number(score);
+    
+    // Calculate stars
+    const stars = scoreNum >= 850 ? 5 : scoreNum >= 750 ? 4 : scoreNum >= 650 ? 3 : scoreNum >= 550 ? 2 : 1;
+    const starStr = '⭐'.repeat(stars);
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}🎯 LOBSTER Credit Score${c.reset}          ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Score: ${c.green}${scoreNum} / 850${c.reset} ${starStr}         ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Tier:  ${c.bright}${tier}${c.reset}${''.padStart(24 - tier.length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────┘${c.reset}`);
+    
+    if (args.length === 0) {
+      console.log(`\n${c.dim}Use ${c.cyan}paylobster credit${c.reset}${c.dim} to see your credit limit${c.reset}\n`);
+    }
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Error: ${e.message}\n`);
+  }
+}
+
+// Handle credit command: paylobster credit
+async function handleCredit(): Promise<void> {
+  const config = loadConfig();
+  
+  if (!config.privateKey) {
+    console.log(`${c.red}✗${c.reset} No wallet configured. Run ${c.cyan}paylobster setup${c.reset} first.`);
+    return;
+  }
+  
+  try {
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const creditContract = new ethers.Contract(V3_CONTRACTS.credit, V3_ABIS.credit, provider);
+    const address = getAddress(config.privateKey);
+    
+    console.log(`\n${c.dim}Fetching credit status...${c.reset}\n`);
+    
+    const [limit, available, inUse] = await creditContract.getCreditStatus(address);
+    const [score, tier] = await creditContract.getCreditScore(address);
+    
+    const limitNum = Number(ethers.formatUnits(limit, 6));
+    const availableNum = Number(ethers.formatUnits(available, 6));
+    const inUseNum = Number(ethers.formatUnits(inUse, 6));
+    const utilization = limitNum > 0 ? ((inUseNum / limitNum) * 100).toFixed(1) : '0.0';
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}💳 Your Credit Status${c.reset}            ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Tier:          ${c.bright}${tier}${c.reset}${''.padStart(17 - String(tier).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Credit Limit:  ${c.green}$${limitNum.toFixed(2).padStart(10)}${c.reset}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Available:     ${c.green}$${availableNum.toFixed(2).padStart(10)}${c.reset}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  In Use:        ${c.yellow}$${inUseNum.toFixed(2).padStart(10)}${c.reset}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Utilization:   ${utilization}%${''.padStart(14 - String(utilization).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────┘${c.reset}`);
+    console.log();
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Error: ${e.message}\n`);
+  }
+}
+
+// Handle tier command: paylobster tier
+async function handleTier(): Promise<void> {
+  const config = loadConfig();
+  
+  if (!config.privateKey) {
+    console.log(`${c.red}✗${c.reset} No wallet configured. Run ${c.cyan}paylobster setup${c.reset} first.`);
+    return;
+  }
+  
+  try {
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const creditContract = new ethers.Contract(V3_CONTRACTS.credit, V3_ABIS.credit, provider);
+    const address = getAddress(config.privateKey);
+    
+    console.log(`\n${c.dim}Fetching tier status...${c.reset}\n`);
+    
+    const [tier, score] = await creditContract.getTier(address);
+    const scoreNum = Number(score);
+    
+    // Tier thresholds
+    const tiers = [
+      { name: 'Standard', min: 300, max: 549, stars: 1 },
+      { name: 'Bronze', min: 550, max: 649, stars: 2 },
+      { name: 'Silver', min: 650, max: 749, stars: 3 },
+      { name: 'Gold', min: 750, max: 849, stars: 4 },
+      { name: 'Elite', min: 850, max: 850, stars: 5 },
+    ];
+    
+    const currentTierIndex = tiers.findIndex(t => t.name.toLowerCase() === tier.toLowerCase());
+    const currentTier = tiers[currentTierIndex];
+    const nextTier = currentTierIndex < tiers.length - 1 ? tiers[currentTierIndex + 1] : null;
+    
+    const starStr = '⭐'.repeat(currentTier.stars);
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}🏆 Credit Tier Status${c.reset}            ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Current: ${c.bright}${tier}${c.reset} ${starStr}${''.padStart(15 - tier.length - starStr.length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Score:   ${c.green}${scoreNum} / 850${c.reset}${''.padStart(15 - String(scoreNum).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────┘${c.reset}`);
+    
+    if (nextTier) {
+      const needed = nextTier.min - scoreNum;
+      const progress = ((scoreNum - currentTier.min) / (nextTier.min - currentTier.min)) * 100;
+      const bars = Math.floor(progress / 5);
+      const progressBar = '█'.repeat(bars) + '░'.repeat(20 - bars);
+      
+      console.log(`\n${c.dim}Progress to ${nextTier.name}:${c.reset}`);
+      console.log(`[${c.green}${progressBar}${c.reset}] ${scoreNum}/${nextTier.min} (${progress.toFixed(0)}%)`);
+      console.log(`${c.dim}Need: +${needed} points${c.reset}\n`);
+    } else {
+      console.log(`\n${c.green}✓${c.reset} ${c.bright}You've reached the highest tier!${c.reset}\n`);
+    }
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Error: ${e.message}\n`);
+  }
+}
+
+// Handle credit-history command: paylobster credit-history
+async function handleCreditHistory(): Promise<void> {
+  const config = loadConfig();
+  
+  if (!config.privateKey) {
+    console.log(`${c.red}✗${c.reset} No wallet configured. Run ${c.cyan}paylobster setup${c.reset} first.`);
+    return;
+  }
+  
+  try {
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const creditContract = new ethers.Contract(V3_CONTRACTS.credit, V3_ABIS.credit, provider);
+    const address = getAddress(config.privateKey);
+    
+    console.log(`\n${c.dim}Fetching credit history...${c.reset}\n`);
+    
+    const history = await creditContract.getCreditHistory(address);
+    const borrowed = Number(ethers.formatUnits(history.borrowed, 6));
+    const repaid = Number(ethers.formatUnits(history.repaid, 6));
+    const active = Number(ethers.formatUnits(history.active, 6));
+    const repaymentRate = Number(history.repaymentRate) / 100;
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}📊 Credit History${c.reset}                ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Total Borrowed:  $${borrowed.toFixed(2).padStart(10)}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Total Repaid:    $${repaid.toFixed(2).padStart(10)}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Active Loans:    $${active.toFixed(2).padStart(10)}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Repayment Rate:  ${c.green}${repaymentRate.toFixed(1)}%${c.reset} ⭐${''.padStart(8 - String(repaymentRate.toFixed(1)).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────┘${c.reset}`);
+    console.log();
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Error: ${e.message}\n`);
+  }
+}
+
+// Handle repay command: paylobster repay <loanId>
+async function handleRepay(args: string[]): Promise<void> {
+  const config = loadConfig();
+  
+  if (!config.privateKey) {
+    console.log(`${c.red}✗${c.reset} No wallet configured. Run ${c.cyan}paylobster setup${c.reset} first.`);
+    return;
+  }
+  
+  if (args.length === 0) {
+    console.log(`\n${c.bright}Usage:${c.reset} paylobster repay <loanId>\n`);
+    console.log(`${c.dim}Example:${c.reset} ${c.cyan}paylobster repay 47${c.reset}\n`);
+    return;
+  }
+  
+  const loanId = args[0];
+  
+  try {
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const signer = new ethers.Wallet(config.privateKey, provider);
+    const escrowContract = new ethers.Contract(V3_CONTRACTS.escrow, V3_ABIS.escrow, signer);
+    
+    console.log(`\n${c.dim}Fetching loan details...${c.reset}\n`);
+    
+    const loan = await escrowContract.getLoanDetails(loanId);
+    const remaining = Number(ethers.formatUnits(loan.remaining, 6));
+    
+    if (remaining === 0) {
+      console.log(`${c.green}✓${c.reset} Loan #${loanId} is already fully repaid!\n`);
+      return;
+    }
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}💳 Repaying Loan #${loanId}${c.reset}${''.padStart(16 - String(loanId).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Amount Due:  $${remaining.toFixed(2).padStart(12)}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────┘${c.reset}`);
+    console.log();
+    
+    console.log(`${c.dim}Sending repayment transaction...${c.reset}`);
+    const tx = await escrowContract.repayLoan(loanId, {
+      value: ethers.parseUnits(remaining.toString(), 6)
+    });
+    
+    console.log(`${c.dim}Waiting for confirmation...${c.reset}`);
+    await tx.wait();
+    
+    console.log(`\n${c.green}✓ Loan Repaid!${c.reset}`);
+    console.log(`  ${c.dim}TX:${c.reset} ${c.cyan}${tx.hash}${c.reset}`);
+    console.log(`  ${c.dim}Amount:${c.reset} $${remaining.toFixed(2)}`);
+    console.log(`\n  ${c.dim}View: https://basescan.org/tx/${tx.hash}${c.reset}\n`);
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Repayment failed: ${e.message}\n`);
+  }
+}
+
+// Handle loans command: paylobster loans
+async function handleLoans(): Promise<void> {
+  const config = loadConfig();
+  
+  if (!config.privateKey) {
+    console.log(`${c.red}✗${c.reset} No wallet configured. Run ${c.cyan}paylobster setup${c.reset} first.`);
+    return;
+  }
+  
+  try {
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const escrowContract = new ethers.Contract(V3_CONTRACTS.escrow, V3_ABIS.escrow, provider);
+    const address = getAddress(config.privateKey);
+    
+    console.log(`\n${c.dim}Fetching active loans...${c.reset}\n`);
+    
+    const loans = await escrowContract.getActiveLoans(address);
+    
+    if (loans.length === 0) {
+      console.log(`${c.dim}No active loans found.${c.reset}`);
+      console.log(`${c.dim}Create a credit-backed escrow to borrow against your reputation!${c.reset}\n`);
+      return;
+    }
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}💳 Active Credit Loans${c.reset}                      ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────────────────┘${c.reset}\n`);
+    
+    console.log(`${c.dim}  ID      Amount        Due Date       Status${c.reset}`);
+    console.log(`${c.dim}  ──────  ────────────  ─────────────  ───────${c.reset}`);
+    
+    let totalDue = 0;
+    const now = Math.floor(Date.now() / 1000);
+    
+    for (const loan of loans) {
+      const id = Number(loan.id);
+      const remaining = Number(ethers.formatUnits(loan.remaining, 6));
+      const dueDate = Number(loan.dueDate);
+      const daysUntil = Math.floor((dueDate - now) / 86400);
+      
+      totalDue += remaining;
+      
+      let status = '✓ On Track';
+      let statusColor = c.green;
+      if (daysUntil < 0) {
+        status = '✗ Overdue';
+        statusColor = c.red;
+      } else if (daysUntil < 3) {
+        status = '⚠ Due Soon';
+        statusColor = c.yellow;
+      }
+      
+      console.log(`  #${id.toString().padEnd(6)}$${remaining.toFixed(2).padStart(10)}    ${daysUntil} days      ${statusColor}${status}${c.reset}`);
+    }
+    
+    console.log(`${c.dim}  ──────────────────────────────────────────────${c.reset}`);
+    console.log(`  ${c.bright}Total: $${totalDue.toFixed(2)}${c.reset}\n`);
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Error: ${e.message}\n`);
+  }
+}
+
+// Handle loan details command: paylobster loan <loanId>
+async function handleLoanDetails(args: string[]): Promise<void> {
+  const config = loadConfig();
+  
+  if (args.length === 0) {
+    console.log(`\n${c.bright}Usage:${c.reset} paylobster loan <loanId>\n`);
+    console.log(`${c.dim}Example:${c.reset} ${c.cyan}paylobster loan 47${c.reset}\n`);
+    return;
+  }
+  
+  const loanId = args[0];
+  
+  try {
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const escrowContract = new ethers.Contract(V3_CONTRACTS.escrow, V3_ABIS.escrow, provider);
+    
+    console.log(`\n${c.dim}Fetching loan details...${c.reset}\n`);
+    
+    const loan = await escrowContract.getLoanDetails(loanId);
+    const original = Number(ethers.formatUnits(loan.original, 6));
+    const remaining = Number(ethers.formatUnits(loan.remaining, 6));
+    const paid = Number(ethers.formatUnits(loan.paid, 6));
+    const dueDate = new Date(Number(loan.dueDate) * 1000);
+    const now = new Date();
+    const daysUntil = Math.floor((dueDate.getTime() - now.getTime()) / 86400000);
+    
+    let status = '✓ On Track';
+    let statusColor = c.green;
+    if (remaining === 0) {
+      status = '✓ Paid in Full';
+      statusColor = c.green;
+    } else if (daysUntil < 0) {
+      status = '✗ Overdue';
+      statusColor = c.red;
+    } else if (daysUntil < 3) {
+      status = '⚠ Payment Due Soon';
+      statusColor = c.yellow;
+    }
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}💳 Loan Details #${loanId}${c.reset}${''.padStart(14 - String(loanId).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Original:   $${original.toFixed(2).padStart(12)}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Remaining:  $${remaining.toFixed(2).padStart(12)}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Paid:       $${paid.toFixed(2).padStart(12)}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Due:        ${dueDate.toLocaleDateString().padEnd(12)}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Days Until: ${daysUntil.toString().padEnd(12)}     ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Seller:     ${loan.seller.slice(0, 10)}... ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Status: ${statusColor}${status}${c.reset}${''.padStart(20 - status.length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────┘${c.reset}`);
+    console.log();
+    
+    if (remaining > 0) {
+      console.log(`${c.dim}To repay: ${c.cyan}paylobster repay ${loanId}${c.reset}\n`);
+    }
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Error: ${e.message}\n`);
+  }
+}
+
+// Handle reputation command: paylobster reputation [address]
+async function handleReputation(args: string[]): Promise<void> {
+  const config = loadConfig();
+  
+  try {
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const reputationContract = new ethers.Contract(V3_CONTRACTS.reputation, V3_ABIS.reputation, provider);
+    
+    let address: string;
+    if (args.length > 0) {
+      address = args[0];
+      console.log(`\n${c.dim}Checking reputation for ${address}...${c.reset}\n`);
+    } else {
+      if (!config.privateKey) {
+        console.log(`${c.red}✗${c.reset} No wallet configured. Run ${c.cyan}paylobster setup${c.reset} first.`);
+        return;
+      }
+      address = getAddress(config.privateKey);
+      console.log(`\n${c.dim}Fetching your reputation...${c.reset}\n`);
+    }
+    
+    const rep = await reputationContract.getReputation(address);
+    const overall = Number(rep.overall);
+    const delivery = Number(rep.delivery);
+    const communication = Number(rep.communication);
+    const quality = Number(rep.quality);
+    const reliability = Number(rep.reliability);
+    const totalRatings = Number(rep.totalRatings);
+    
+    const stars = overall >= 90 ? 5 : overall >= 80 ? 4 : overall >= 70 ? 3 : overall >= 60 ? 2 : 1;
+    const starStr = '⭐'.repeat(stars);
+    
+    const makeBar = (val: number) => {
+      const bars = Math.floor(val / 5);
+      return '█'.repeat(bars) + '░'.repeat(20 - bars);
+    };
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}🏆 Reputation Profile${c.reset}                       ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Overall: ${c.green}${overall}/100${c.reset} ${starStr}${''.padStart(30 - String(overall).length - starStr.length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Delivery:       ${delivery}/100 [${c.green}${makeBar(delivery)}${c.reset}]  ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Communication:  ${communication}/100 [${c.green}${makeBar(communication)}${c.reset}]  ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Quality:        ${quality}/100 [${c.green}${makeBar(quality)}${c.reset}]  ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Reliability:    ${reliability}/100 [${c.green}${makeBar(reliability)}${c.reset}]  ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Total Ratings: ${totalRatings}${''.padStart(30 - String(totalRatings).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────────────────┘${c.reset}`);
+    console.log();
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Error: ${e.message}\n`);
+  }
+}
+
+// Handle trust-history command: paylobster trust-history
+async function handleTrustHistory(): Promise<void> {
+  const config = loadConfig();
+  
+  if (!config.privateKey) {
+    console.log(`${c.red}✗${c.reset} No wallet configured. Run ${c.cyan}paylobster setup${c.reset} first.`);
+    return;
+  }
+  
+  try {
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const reputationContract = new ethers.Contract(V3_CONTRACTS.reputation, V3_ABIS.reputation, provider);
+    const address = getAddress(config.privateKey);
+    
+    console.log(`\n${c.dim}Fetching trust history (last 90 days)...${c.reset}\n`);
+    
+    const history = await reputationContract.getTrustHistory(address, 90);
+    
+    if (history.length === 0) {
+      console.log(`${c.dim}No trust history found.${c.reset}`);
+      console.log(`${c.dim}Complete transactions to build your reputation!${c.reset}\n`);
+      return;
+    }
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}📈 Trust History (Last 90 Days)${c.reset}             ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────────────────┘${c.reset}\n`);
+    
+    console.log(`${c.dim}  Date           Score   Event${c.reset}`);
+    console.log(`${c.dim}  ─────────────  ──────  ──────────────────${c.reset}`);
+    
+    for (const entry of history.slice(0, 10)) {
+      const date = new Date(Number(entry.timestamp) * 1000).toLocaleDateString();
+      const score = Number(entry.score);
+      const event = entry.event;
+      console.log(`  ${date.padEnd(13)}  ${score.toString().padStart(3)}/100  ${c.dim}${event}${c.reset}`);
+    }
+    
+    console.log();
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Error: ${e.message}\n`);
+  }
+}
+
+// Handle identity command: paylobster identity [address]
+async function handleIdentity(args: string[]): Promise<void> {
+  const config = loadConfig();
+  
+  try {
+    const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const identityContract = new ethers.Contract(V3_CONTRACTS.identity, V3_ABIS.identity, provider);
+    
+    let address: string;
+    if (args.length > 0) {
+      address = args[0];
+      console.log(`\n${c.dim}Fetching identity for ${address}...${c.reset}\n`);
+    } else {
+      if (!config.privateKey) {
+        console.log(`${c.red}✗${c.reset} No wallet configured. Run ${c.cyan}paylobster setup${c.reset} first.`);
+        return;
+      }
+      address = getAddress(config.privateKey);
+      console.log(`\n${c.dim}Fetching your identity...${c.reset}\n`);
+    }
+    
+    const identity = await identityContract.getIdentity(address);
+    const tokenId = Number(identity.tokenId);
+    const name = identity.name;
+    const registered = new Date(Number(identity.registered) * 1000);
+    const capabilities = identity.capabilities;
+    const daysAgo = Math.floor((Date.now() - registered.getTime()) / 86400000);
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}🆔 Agent Identity${c.reset}                           ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Token ID:   #${tokenId}${''.padStart(35 - String(tokenId).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Name:       ${c.bright}${name}${c.reset}${''.padStart(35 - name.length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Address:    ${address.slice(0, 10)}...${''.padStart(20)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Registered: ${daysAgo} days ago${''.padStart(26 - String(daysAgo).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────────────────┤${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  Capabilities:${''.padStart(34)}${c.cyan}│${c.reset}`);
+    
+    for (const cap of capabilities) {
+      console.log(`${c.cyan}│${c.reset}    • ${c.green}${cap}${c.reset}${''.padStart(41 - cap.length)}${c.cyan}│${c.reset}`);
+    }
+    
+    console.log(`${c.cyan}└─────────────────────────────────────────────────┘${c.reset}`);
+    console.log();
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Error: ${e.message}\n`);
+  }
+}
+
+// Handle agents command: paylobster agents
+async function handleAgents(args: string[]): Promise<void> {
+  try {
+    const provider = new ethers.JsonRpcProvider('https://mainnet.base.org');
+    const identityContract = new ethers.Contract(V3_CONTRACTS.identity, V3_ABIS.identity, provider);
+    
+    console.log(`\n${c.dim}Fetching registered agents...${c.reset}\n`);
+    
+    const agents = await identityContract.getAllAgents(0, 10);
+    
+    if (agents.length === 0) {
+      console.log(`${c.dim}No agents registered yet.${c.reset}`);
+      console.log(`${c.dim}Be the first: ${c.cyan}paylobster register${c.reset}\n`);
+      return;
+    }
+    
+    console.log(`${c.cyan}┌─────────────────────────────────────────────────┐${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}🤖 Registered Agents${c.reset}                        ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}└─────────────────────────────────────────────────┘${c.reset}\n`);
+    
+    console.log(`${c.dim}  Name                    Score    Address${c.reset}`);
+    console.log(`${c.dim}  ──────────────────────  ───────  ──────────────${c.reset}`);
+    
+    for (const agent of agents) {
+      const name = agent.name.padEnd(22);
+      const score = `${agent.score}/100`.padEnd(7);
+      const addr = agent.agent.slice(0, 6) + '...' + agent.agent.slice(-4);
+      console.log(`  ${name}  ${c.green}${score}${c.reset}  ${c.dim}${addr}${c.reset}`);
+    }
+    
+    console.log();
+    
+  } catch (e: any) {
+    console.log(`${c.red}✗${c.reset} Error: ${e.message}\n`);
+  }
+}
+
+// Handle trust-gate status command
+async function handleTrustGateStatus(): Promise<void> {
+  const config = loadAutonomousConfig();
+  const tg = config.trustGate;
+  
+  console.log(`\n${c.cyan}┌─────────────────────────────────────────────────┐${c.reset}`);
+  console.log(`${c.cyan}│${c.reset}  ${c.bright}🛡️  Trust Gate Configuration${c.reset}                ${c.cyan}│${c.reset}`);
+  console.log(`${c.cyan}├─────────────────────────────────────────────────┤${c.reset}`);
+  console.log(`${c.cyan}│${c.reset}  Enabled:       ${tg.enabled ? c.green + '✓ Yes' : c.red + '✗ No'}${c.reset}${''.padStart(29 - (tg.enabled ? 5 : 4))}${c.cyan}│${c.reset}`);
+  console.log(`${c.cyan}│${c.reset}  Min Score:     ${tg.minScore}${''.padStart(33 - String(tg.minScore).length)}${c.cyan}│${c.reset}`);
+  console.log(`${c.cyan}│${c.reset}  Min Tier:      ${tg.minTier}${''.padStart(33 - tg.minTier.length)}${c.cyan}│${c.reset}`);
+  console.log(`${c.cyan}│${c.reset}  Allow Unscored: ${tg.allowUnscored ? c.yellow + 'Yes' : 'No'}${c.reset}${''.padStart(32 - (tg.allowUnscored ? 3 : 2))}${c.cyan}│${c.reset}`);
+  console.log(`${c.cyan}├─────────────────────────────────────────────────┤${c.reset}`);
+  console.log(`${c.cyan}│${c.reset}  ${c.bright}Exceptions (${tg.exceptions.length}):${c.reset}${''.padStart(30 - String(tg.exceptions.length).length)}${c.cyan}│${c.reset}`);
+  
+  if (tg.exceptions.length === 0) {
+    console.log(`${c.cyan}│${c.reset}    ${c.dim}(none)${c.reset}${''.padStart(40)}${c.cyan}│${c.reset}`);
+  } else {
+    for (const addr of tg.exceptions.slice(0, 5)) {
+      const short = addr.slice(0, 10) + '...' + addr.slice(-8);
+      console.log(`${c.cyan}│${c.reset}    • ${short}${''.padStart(40 - short.length)}${c.cyan}│${c.reset}`);
+    }
+    if (tg.exceptions.length > 5) {
+      console.log(`${c.cyan}│${c.reset}    ${c.dim}...and ${tg.exceptions.length - 5} more${c.reset}${''.padStart(30 - String(tg.exceptions.length - 5).length)}${c.cyan}│${c.reset}`);
+    }
+  }
+  
+  console.log(`${c.cyan}└─────────────────────────────────────────────────┘${c.reset}\n`);
+  
+  if (!tg.enabled) {
+    console.log(`${c.dim}To enable: ${c.cyan}paylobster trust-gate set --enable${c.reset}\n`);
+  }
+}
+
+// Handle trust-gate set command
+async function handleTrustGateSet(args: string[]): Promise<void> {
+  const config = loadAutonomousConfig();
+  const tg = config.trustGate;
+  
+  let changed = false;
+  
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg === '--enable') {
+      tg.enabled = true;
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Trust gate enabled`);
+    } else if (arg === '--disable') {
+      tg.enabled = false;
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Trust gate disabled`);
+    } else if (arg === '--min-score') {
+      const score = parseInt(args[++i]);
+      if (isNaN(score) || score < 0 || score > 1000) {
+        console.log(`${c.red}✗${c.reset} Invalid score (must be 0-1000)`);
+        continue;
+      }
+      tg.minScore = score;
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Minimum score set to ${score}`);
+    } else if (arg === '--min-tier') {
+      const tier = args[++i]?.toUpperCase();
+      if (!['STANDARD', 'BUILDING', 'GOOD', 'EXCELLENT', 'ELITE'].includes(tier)) {
+        console.log(`${c.red}✗${c.reset} Invalid tier (must be STANDARD, BUILDING, GOOD, EXCELLENT, or ELITE)`);
+        continue;
+      }
+      tg.minTier = tier as any;
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Minimum tier set to ${tier}`);
+    } else if (arg === '--allow-unscored') {
+      tg.allowUnscored = true;
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Allowing unscored agents`);
+    } else if (arg === '--disallow-unscored') {
+      tg.allowUnscored = false;
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Disallowing unscored agents`);
+    }
+  }
+  
+  if (changed) {
+    saveAutonomousConfig(config);
+    console.log(`\n${c.green}✓${c.reset} Configuration saved\n`);
+  } else {
+    console.log(`\n${c.yellow}⚠${c.reset}  No changes made\n`);
+    console.log(`${c.dim}Usage: paylobster trust-gate set [options]${c.reset}`);
+    console.log(`${c.dim}Options:${c.reset}`);
+    console.log(`  --enable / --disable`);
+    console.log(`  --min-score <0-1000>`);
+    console.log(`  --min-tier <STANDARD|BUILDING|GOOD|EXCELLENT|ELITE>`);
+    console.log(`  --allow-unscored / --disallow-unscored\n`);
+  }
+}
+
+// Handle trust-gate add-exception command
+async function handleTrustGateAddException(args: string[]): Promise<void> {
+  if (args.length === 0) {
+    console.log(`\n${c.bright}Usage:${c.reset} paylobster trust-gate add-exception <address>\n`);
+    return;
+  }
+  
+  const address = args[0];
+  if (!ethers.isAddress(address)) {
+    console.log(`\n${c.red}✗${c.reset} Invalid Ethereum address\n`);
+    return;
+  }
+  
+  const config = loadAutonomousConfig();
+  const addressLower = address.toLowerCase();
+  
+  if (config.trustGate.exceptions.some(a => a.toLowerCase() === addressLower)) {
+    console.log(`\n${c.yellow}⚠${c.reset}  Address already in exceptions list\n`);
+    return;
+  }
+  
+  config.trustGate.exceptions.push(address);
+  saveAutonomousConfig(config);
+  
+  console.log(`\n${c.green}✓${c.reset} Added ${address} to exceptions list\n`);
+}
+
+// Handle trust-gate remove-exception command
+async function handleTrustGateRemoveException(args: string[]): Promise<void> {
+  if (args.length === 0) {
+    console.log(`\n${c.bright}Usage:${c.reset} paylobster trust-gate remove-exception <address>\n`);
+    return;
+  }
+  
+  const address = args[0];
+  const config = loadAutonomousConfig();
+  const addressLower = address.toLowerCase();
+  
+  const index = config.trustGate.exceptions.findIndex(a => a.toLowerCase() === addressLower);
+  if (index === -1) {
+    console.log(`\n${c.yellow}⚠${c.reset}  Address not found in exceptions list\n`);
+    return;
+  }
+  
+  config.trustGate.exceptions.splice(index, 1);
+  saveAutonomousConfig(config);
+  
+  console.log(`\n${c.green}✓${c.reset} Removed ${address} from exceptions list\n`);
+}
+
+// Handle limits status command
+async function handleLimitsStatus(): Promise<void> {
+  const config = loadAutonomousConfig();
+  const sp = config.spending;
+  
+  console.log(`\n${c.cyan}┌─────────────────────────────────────────────────┐${c.reset}`);
+  console.log(`${c.cyan}│${c.reset}  ${c.bright}💰 Spending Limits Configuration${c.reset}            ${c.cyan}│${c.reset}`);
+  console.log(`${c.cyan}├─────────────────────────────────────────────────┤${c.reset}`);
+  console.log(`${c.cyan}│${c.reset}  Enabled:  ${sp.enabled ? c.green + '✓ Yes' : c.red + '✗ No'}${c.reset}${''.padStart(34 - (sp.enabled ? 5 : 4))}${c.cyan}│${c.reset}`);
+  console.log(`${c.cyan}├─────────────────────────────────────────────────┤${c.reset}`);
+  
+  if (sp.globalLimits) {
+    const gl = sp.globalLimits;
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}Global Limits:${c.reset}${''.padStart(32)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}    Max Transaction: $${ethers.formatUnits(gl.maxTransaction, 6).padStart(12)} USDC ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}    Daily Limit:     $${ethers.formatUnits(gl.dailyLimit, 6).padStart(12)} USDC ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}    Weekly Limit:    $${ethers.formatUnits(gl.weeklyLimit, 6).padStart(12)} USDC ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}    Monthly Limit:   $${ethers.formatUnits(gl.monthlyLimit, 6).padStart(12)} USDC ${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────────────────┤${c.reset}`);
+    
+    // Show current usage
+    const summary = getSpendingSummary();
+    const dailyPct = gl.dailyLimit > 0n ? Number((summary.daily * 100n) / gl.dailyLimit) : 0;
+    const weeklyPct = gl.weeklyLimit > 0n ? Number((summary.weekly * 100n) / gl.weeklyLimit) : 0;
+    const monthlyPct = gl.monthlyLimit > 0n ? Number((summary.monthly * 100n) / gl.monthlyLimit) : 0;
+    
+    console.log(`${c.cyan}│${c.reset}  ${c.bright}Current Usage:${c.reset}${''.padStart(32)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}    Daily:   $${ethers.formatUnits(summary.daily, 6).padStart(8)} (${dailyPct.toFixed(0)}%)${''.padStart(20 - dailyPct.toFixed(0).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}    Weekly:  $${ethers.formatUnits(summary.weekly, 6).padStart(8)} (${weeklyPct.toFixed(0)}%)${''.padStart(20 - weeklyPct.toFixed(0).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}│${c.reset}    Monthly: $${ethers.formatUnits(summary.monthly, 6).padStart(8)} (${monthlyPct.toFixed(0)}%)${''.padStart(20 - monthlyPct.toFixed(0).length)}${c.cyan}│${c.reset}`);
+    console.log(`${c.cyan}├─────────────────────────────────────────────────┤${c.reset}`);
+  }
+  
+  const perAgentCount = Object.keys(sp.perAgent).length;
+  console.log(`${c.cyan}│${c.reset}  ${c.bright}Per-Agent Limits (${perAgentCount}):${c.reset}${''.padStart(24 - String(perAgentCount).length)}${c.cyan}│${c.reset}`);
+  
+  if (perAgentCount === 0) {
+    console.log(`${c.cyan}│${c.reset}    ${c.dim}(none)${c.reset}${''.padStart(40)}${c.cyan}│${c.reset}`);
+  } else {
+    const agents = Object.entries(sp.perAgent).slice(0, 5);
+    for (const [addr, limit] of agents) {
+      const short = addr.slice(0, 6) + '...' + addr.slice(-4);
+      const max = ethers.formatUnits(limit.maxAmount, 6);
+      console.log(`${c.cyan}│${c.reset}    ${short}: $${max}${''.padStart(33 - short.length - max.length)}${c.cyan}│${c.reset}`);
+    }
+    if (perAgentCount > 5) {
+      console.log(`${c.cyan}│${c.reset}    ${c.dim}...and ${perAgentCount - 5} more${c.reset}${''.padStart(32 - String(perAgentCount - 5).length)}${c.cyan}│${c.reset}`);
+    }
+  }
+  
+  console.log(`${c.cyan}└─────────────────────────────────────────────────┘${c.reset}\n`);
+  
+  if (!sp.enabled) {
+    console.log(`${c.dim}To enable: ${c.cyan}paylobster limits set-global --enable${c.reset}\n`);
+  }
+}
+
+// Handle limits set-global command
+async function handleLimitsSetGlobal(args: string[]): Promise<void> {
+  const config = loadAutonomousConfig();
+  const sp = config.spending;
+  
+  if (!sp.globalLimits) {
+    sp.globalLimits = {
+      maxTransaction: ethers.parseUnits('1000', 6),
+      dailyLimit: ethers.parseUnits('5000', 6),
+      weeklyLimit: ethers.parseUnits('20000', 6),
+      monthlyLimit: ethers.parseUnits('50000', 6),
+    };
+  }
+  
+  let changed = false;
+  
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg === '--enable') {
+      sp.enabled = true;
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Spending limits enabled`);
+    } else if (arg === '--disable') {
+      sp.enabled = false;
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Spending limits disabled`);
+    } else if (arg === '--max-tx') {
+      const amount = parseFloat(args[++i]);
+      if (isNaN(amount) || amount <= 0) {
+        console.log(`${c.red}✗${c.reset} Invalid amount`);
+        continue;
+      }
+      sp.globalLimits.maxTransaction = ethers.parseUnits(amount.toString(), 6);
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Max transaction set to $${amount} USDC`);
+    } else if (arg === '--daily') {
+      const amount = parseFloat(args[++i]);
+      if (isNaN(amount) || amount <= 0) {
+        console.log(`${c.red}✗${c.reset} Invalid amount`);
+        continue;
+      }
+      sp.globalLimits.dailyLimit = ethers.parseUnits(amount.toString(), 6);
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Daily limit set to $${amount} USDC`);
+    } else if (arg === '--weekly') {
+      const amount = parseFloat(args[++i]);
+      if (isNaN(amount) || amount <= 0) {
+        console.log(`${c.red}✗${c.reset} Invalid amount`);
+        continue;
+      }
+      sp.globalLimits.weeklyLimit = ethers.parseUnits(amount.toString(), 6);
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Weekly limit set to $${amount} USDC`);
+    } else if (arg === '--monthly') {
+      const amount = parseFloat(args[++i]);
+      if (isNaN(amount) || amount <= 0) {
+        console.log(`${c.red}✗${c.reset} Invalid amount`);
+        continue;
+      }
+      sp.globalLimits.monthlyLimit = ethers.parseUnits(amount.toString(), 6);
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Monthly limit set to $${amount} USDC`);
+    }
+  }
+  
+  if (changed) {
+    saveAutonomousConfig(config);
+    console.log(`\n${c.green}✓${c.reset} Configuration saved\n`);
+  } else {
+    console.log(`\n${c.yellow}⚠${c.reset}  No changes made\n`);
+    console.log(`${c.dim}Usage: paylobster limits set-global [options]${c.reset}`);
+    console.log(`${c.dim}Options:${c.reset}`);
+    console.log(`  --enable / --disable`);
+    console.log(`  --max-tx <amount>`);
+    console.log(`  --daily <amount>`);
+    console.log(`  --weekly <amount>`);
+    console.log(`  --monthly <amount>\n`);
+  }
+}
+
+// Handle limits set command
+async function handleLimitsSet(args: string[]): Promise<void> {
+  if (args.length === 0) {
+    console.log(`\n${c.bright}Usage:${c.reset} paylobster limits set <address> [options]\n`);
+    console.log(`${c.dim}Options:${c.reset}`);
+    console.log(`  --max-tx <amount>`);
+    console.log(`  --daily <amount>`);
+    console.log(`  --weekly <amount>`);
+    console.log(`  --monthly <amount>`);
+    console.log(`  --total <amount>\n`);
+    return;
+  }
+  
+  const address = args[0];
+  if (!ethers.isAddress(address)) {
+    console.log(`\n${c.red}✗${c.reset} Invalid Ethereum address\n`);
+    return;
+  }
+  
+  const config = loadAutonomousConfig();
+  const addressLower = address.toLowerCase();
+  
+  if (!config.spending.perAgent[addressLower]) {
+    config.spending.perAgent[addressLower] = {
+      address: addressLower,
+      maxAmount: ethers.parseUnits('1000', 6),
+    };
+  }
+  
+  const limit = config.spending.perAgent[addressLower];
+  let changed = false;
+  
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg === '--max-tx') {
+      const amount = parseFloat(args[++i]);
+      if (isNaN(amount) || amount <= 0) {
+        console.log(`${c.red}✗${c.reset} Invalid amount`);
+        continue;
+      }
+      limit.maxAmount = ethers.parseUnits(amount.toString(), 6);
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Max transaction set to $${amount} USDC`);
+    } else if (arg === '--daily') {
+      const amount = parseFloat(args[++i]);
+      if (isNaN(amount) || amount <= 0) {
+        console.log(`${c.red}✗${c.reset} Invalid amount`);
+        continue;
+      }
+      limit.dailyLimit = ethers.parseUnits(amount.toString(), 6);
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Daily limit set to $${amount} USDC`);
+    } else if (arg === '--weekly') {
+      const amount = parseFloat(args[++i]);
+      if (isNaN(amount) || amount <= 0) {
+        console.log(`${c.red}✗${c.reset} Invalid amount`);
+        continue;
+      }
+      limit.weeklyLimit = ethers.parseUnits(amount.toString(), 6);
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Weekly limit set to $${amount} USDC`);
+    } else if (arg === '--monthly') {
+      const amount = parseFloat(args[++i]);
+      if (isNaN(amount) || amount <= 0) {
+        console.log(`${c.red}✗${c.reset} Invalid amount`);
+        continue;
+      }
+      limit.monthlyLimit = ethers.parseUnits(amount.toString(), 6);
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Monthly limit set to $${amount} USDC`);
+    } else if (arg === '--total') {
+      const amount = parseFloat(args[++i]);
+      if (isNaN(amount) || amount <= 0) {
+        console.log(`${c.red}✗${c.reset} Invalid amount`);
+        continue;
+      }
+      limit.totalLimit = ethers.parseUnits(amount.toString(), 6);
+      changed = true;
+      console.log(`${c.green}✓${c.reset} Lifetime limit set to $${amount} USDC`);
+    }
+  }
+  
+  if (changed) {
+    saveAutonomousConfig(config);
+    console.log(`\n${c.green}✓${c.reset} Configuration saved for ${address}\n`);
+  } else {
+    console.log(`\n${c.yellow}⚠${c.reset}  No changes made\n`);
+  }
+}
+
+// Handle limits remove command
+async function handleLimitsRemove(args: string[]): Promise<void> {
+  if (args.length === 0) {
+    console.log(`\n${c.bright}Usage:${c.reset} paylobster limits remove <address>\n`);
+    return;
+  }
+  
+  const address = args[0];
+  const config = loadAutonomousConfig();
+  const addressLower = address.toLowerCase();
+  
+  if (!config.spending.perAgent[addressLower]) {
+    console.log(`\n${c.yellow}⚠${c.reset}  No limits configured for this address\n`);
+    return;
+  }
+  
+  delete config.spending.perAgent[addressLower];
+  saveAutonomousConfig(config);
+  
+  console.log(`\n${c.green}✓${c.reset} Removed limits for ${address}\n`);
+}
+
+// Handle limits history command
+async function handleLimitsHistory(args: string[]): Promise<void> {
+  const limit = args[0] ? parseInt(args[0]) : 20;
+  const history = getSpendingHistory(limit);
+  
+  if (history.length === 0) {
+    console.log(`\n${c.dim}No spending history found.${c.reset}\n`);
+    return;
+  }
+  
+  console.log(`\n${c.cyan}┌─────────────────────────────────────────────────────────┐${c.reset}`);
+  console.log(`${c.cyan}│${c.reset}  ${c.bright}💸 Recent Spending History${c.reset}                         ${c.cyan}│${c.reset}`);
+  console.log(`${c.cyan}└─────────────────────────────────────────────────────────┘${c.reset}\n`);
+  
+  console.log(`${c.dim}  Date & Time          Recipient            Amount${c.reset}`);
+  console.log(`${c.dim}  ──────────────────   ──────────────────   ────────────${c.reset}`);
+  
+  // Group by recipient
+  const byRecipient: Record<string, bigint> = {};
+  
+  for (const record of history) {
+    const date = new Date(record.timestamp).toLocaleString();
+    const short = record.recipient.slice(0, 6) + '...' + record.recipient.slice(-4);
+    const amount = ethers.formatUnits(record.amount, 6);
+    
+    console.log(`  ${date.padEnd(19)}  ${short.padEnd(17)}  $${amount.padStart(10)} USDC`);
+    
+    byRecipient[record.recipient] = (byRecipient[record.recipient] || 0n) + BigInt(record.amount);
+  }
+  
+  // Show summary by recipient
+  console.log(`\n${c.cyan}┌─────────────────────────────────────────────────────────┐${c.reset}`);
+  console.log(`${c.cyan}│${c.reset}  ${c.bright}Summary by Recipient${c.reset}                                ${c.cyan}│${c.reset}`);
+  console.log(`${c.cyan}└─────────────────────────────────────────────────────────┘${c.reset}\n`);
+  
+  const sorted = Object.entries(byRecipient).sort((a, b) => Number(b[1] - a[1]));
+  
+  for (const [addr, total] of sorted.slice(0, 10)) {
+    const short = addr.slice(0, 10) + '...' + addr.slice(-8);
+    const amount = ethers.formatUnits(total, 6);
+    console.log(`  ${short.padEnd(25)} $${amount.padStart(10)} USDC`);
+  }
+  
+  console.log();
+}
+
 // Main CLI entry point
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -775,6 +1835,109 @@ async function main(): Promise<void> {
     case 'leaderboard':
     case 'top':
       showLeaderboard();
+      break;
+    
+    // V3 Credit Score Commands
+    case 'score':
+      await handleScore(args.slice(1));
+      break;
+    
+    case 'credit':
+      await handleCredit();
+      break;
+    
+    case 'tier':
+      await handleTier();
+      break;
+    
+    case 'credit-history':
+      await handleCreditHistory();
+      break;
+    
+    // V3 Credit Escrow Commands
+    case 'repay':
+      await handleRepay(args.slice(1));
+      break;
+    
+    case 'loans':
+      await handleLoans();
+      break;
+    
+    case 'loan':
+      await handleLoanDetails(args.slice(1));
+      break;
+    
+    // V3 Reputation Commands
+    case 'reputation':
+      await handleReputation(args.slice(1));
+      break;
+    
+    case 'trust-history':
+      await handleTrustHistory();
+      break;
+    
+    // V3 Identity Commands
+    case 'identity':
+      await handleIdentity(args.slice(1));
+      break;
+    
+    case 'agents':
+      await handleAgents(args.slice(1));
+      break;
+    
+    // V3.1.0 Autonomous Agent Commands
+    case 'trust-gate':
+      const tgSubcmd = args[1]?.toLowerCase();
+      switch (tgSubcmd) {
+        case 'status':
+          await handleTrustGateStatus();
+          break;
+        case 'set':
+          await handleTrustGateSet(args.slice(2));
+          break;
+        case 'add-exception':
+          await handleTrustGateAddException(args.slice(2));
+          break;
+        case 'remove-exception':
+          await handleTrustGateRemoveException(args.slice(2));
+          break;
+        default:
+          console.log(`\n${c.bright}Usage:${c.reset} paylobster trust-gate <command>\n`);
+          console.log(`${c.dim}Commands:${c.reset}`);
+          console.log(`  status              Show current trust-gate configuration`);
+          console.log(`  set [options]       Configure trust-gate settings`);
+          console.log(`  add-exception <address>     Whitelist an address`);
+          console.log(`  remove-exception <address>  Remove from whitelist\n`);
+      }
+      break;
+    
+    case 'limits':
+      const limitsSubcmd = args[1]?.toLowerCase();
+      switch (limitsSubcmd) {
+        case 'status':
+          await handleLimitsStatus();
+          break;
+        case 'set-global':
+          await handleLimitsSetGlobal(args.slice(2));
+          break;
+        case 'set':
+          await handleLimitsSet(args.slice(2));
+          break;
+        case 'remove':
+          await handleLimitsRemove(args.slice(2));
+          break;
+        case 'history':
+          await handleLimitsHistory(args.slice(2));
+          break;
+        default:
+          console.log(`\n${c.bright}Usage:${c.reset} paylobster limits <command>\n`);
+          console.log(`${c.dim}Commands:${c.reset}`);
+          console.log(`  status              Show current spending limits`);
+          console.log(`  set-global [opts]   Configure global limits`);
+          console.log(`  set <addr> [opts]   Set per-agent limits`);
+          console.log(`  remove <address>    Remove per-agent limits`);
+          console.log(`  history [count]     Show spending history\n`);
+      }
       break;
       
     default:

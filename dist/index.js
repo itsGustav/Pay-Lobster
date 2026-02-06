@@ -20,7 +20,8 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.default = exports.createX402Fetch = exports.X402Client = exports.generateOnrampUrl = exports.getOnrampSession = exports.createOnrampUrl = exports.onramp = exports.gamification = exports.splits = exports.invoices = exports.subscriptions = exports.getLeaderboard = exports.getStatsSummary = exports.recordEscrow = exports.recordTransfer = exports.loadStats = exports.stats = exports.getSupportedTokens = exports.getPrice = exports.executeSwap = exports.getSwapQuote = exports.listUsernames = exports.getUsername = exports.registerUsername = exports.resolveUsername = exports.quickStart = exports.createLobsterAgent = exports.MultiChainLobsterAgent = exports.LobsterAgent = void 0;
+exports.default = exports.TIER_SCORES = exports.SCORE_FOR_CREDIT = exports.resetAutonomousConfig = exports.getAuditLog = exports.clearSpendingHistory = exports.getSpendingHistory = exports.getSpendingSummary = exports.sendWithTrustGate = exports.recordSpending = exports.checkSpendingLimit = exports.checkTrustGate = exports.saveAutonomousConfig = exports.loadAutonomousConfig = exports.V3_ADDRESSES = exports.createV3Contracts = exports.PayLobsterEscrow = exports.PayLobsterCredit = exports.PayLobsterReputation = exports.PayLobsterIdentity = exports.createX402Fetch = exports.X402Client = exports.generateOnrampUrl = exports.getOnrampSession = exports.createOnrampUrl = exports.onramp = exports.gamification = exports.splits = exports.invoices = exports.subscriptions = exports.getLeaderboard = exports.getStatsSummary = exports.recordEscrow = exports.recordTransfer = exports.loadStats = exports.stats = exports.getSupportedTokens = exports.getPrice = exports.executeSwap = exports.getSwapQuote = exports.listUsernames = exports.getUsername = exports.registerUsername = exports.resolveUsername = exports.quickStart = exports.createLobsterAgent = exports.MultiChainLobsterAgent = exports.LobsterAgent = void 0;
+// V1 Exports (Backward Compatibility)
 var agent_1 = require("./agent");
 Object.defineProperty(exports, "LobsterAgent", { enumerable: true, get: function () { return agent_1.LobsterAgent; } });
 var agent_multichain_1 = require("./agent-multichain");
@@ -64,6 +65,29 @@ __exportStar(require("./chains"), exports);
 var x402_1 = require("./x402");
 Object.defineProperty(exports, "X402Client", { enumerable: true, get: function () { return x402_1.X402Client; } });
 Object.defineProperty(exports, "createX402Fetch", { enumerable: true, get: function () { return x402_1.createX402Fetch; } });
+// V3 Contract Exports
+var contracts_v3_1 = require("./contracts-v3");
+Object.defineProperty(exports, "PayLobsterIdentity", { enumerable: true, get: function () { return contracts_v3_1.PayLobsterIdentity; } });
+Object.defineProperty(exports, "PayLobsterReputation", { enumerable: true, get: function () { return contracts_v3_1.PayLobsterReputation; } });
+Object.defineProperty(exports, "PayLobsterCredit", { enumerable: true, get: function () { return contracts_v3_1.PayLobsterCredit; } });
+Object.defineProperty(exports, "PayLobsterEscrow", { enumerable: true, get: function () { return contracts_v3_1.PayLobsterEscrow; } });
+Object.defineProperty(exports, "createV3Contracts", { enumerable: true, get: function () { return contracts_v3_1.createV3Contracts; } });
+Object.defineProperty(exports, "V3_ADDRESSES", { enumerable: true, get: function () { return contracts_v3_1.V3_ADDRESSES; } });
+// V3.1.0 Autonomous Agent Features
+var autonomous_1 = require("./autonomous");
+Object.defineProperty(exports, "loadAutonomousConfig", { enumerable: true, get: function () { return autonomous_1.loadConfig; } });
+Object.defineProperty(exports, "saveAutonomousConfig", { enumerable: true, get: function () { return autonomous_1.saveConfig; } });
+Object.defineProperty(exports, "checkTrustGate", { enumerable: true, get: function () { return autonomous_1.checkTrustGate; } });
+Object.defineProperty(exports, "checkSpendingLimit", { enumerable: true, get: function () { return autonomous_1.checkSpendingLimit; } });
+Object.defineProperty(exports, "recordSpending", { enumerable: true, get: function () { return autonomous_1.recordSpending; } });
+Object.defineProperty(exports, "sendWithTrustGate", { enumerable: true, get: function () { return autonomous_1.sendWithTrustGate; } });
+Object.defineProperty(exports, "getSpendingSummary", { enumerable: true, get: function () { return autonomous_1.getSpendingSummary; } });
+Object.defineProperty(exports, "getSpendingHistory", { enumerable: true, get: function () { return autonomous_1.getSpendingHistory; } });
+Object.defineProperty(exports, "clearSpendingHistory", { enumerable: true, get: function () { return autonomous_1.clearSpendingHistory; } });
+Object.defineProperty(exports, "getAuditLog", { enumerable: true, get: function () { return autonomous_1.getAuditLog; } });
+Object.defineProperty(exports, "resetAutonomousConfig", { enumerable: true, get: function () { return autonomous_1.resetConfig; } });
+Object.defineProperty(exports, "SCORE_FOR_CREDIT", { enumerable: true, get: function () { return autonomous_1.SCORE_FOR_CREDIT; } });
+Object.defineProperty(exports, "TIER_SCORES", { enumerable: true, get: function () { return autonomous_1.TIER_SCORES; } });
 // Default export for convenience
 var agent_2 = require("./agent");
 Object.defineProperty(exports, "default", { enumerable: true, get: function () { return agent_2.LobsterAgent; } });

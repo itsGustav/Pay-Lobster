@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 6%;
+    --foreground: 0 0% 98%;
+    --primary: 24 95% 53%;
+    --primary-foreground: 0 0% 98%;
+  }
+
+  * {
+    border-color: rgb(38 38 38);
+  }
+
+  body {
+    background-color: rgb(10 10 10);
+    color: white;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* OnchainKit overrides for dark theme */
+[data-theme="dark"] {
+  --ock-bg-default: rgb(10 10 10);
+  --ock-bg-alternate: rgb(23 23 23);
+  --ock-bg-inverse: rgb(255 255 255);
+  
+  --ock-text-foreground: rgb(245 245 245);
+  --ock-text-foreground-muted: rgb(163 163 163);
+  --ock-text-inverse: rgb(10 10 10);
+  
+  --ock-border-default: rgb(38 38 38);
+  --ock-border-hover: rgb(234 88 12);
+  
+  --ock-primary: rgb(234 88 12);
+  --ock-primary-hover: rgb(194 65 12);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(10 10 10);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(64 64 64);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(115 115 115);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Loading spinner */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
